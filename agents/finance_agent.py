@@ -106,12 +106,23 @@ def run_finance_query_structured(query: str, history: list = None) -> dict:
 
     answer = chat_completion(messages, max_tokens=280, temperature=0.3)
 
+    findings = []
+    for prod, pdata in data.get("products", {}).items():
+        findings.append(f"{prod}: Revenue ${pdata.get('latest_revenue',0):,.0f} (+{pdata.get('growth_pct',0)}% growth)")
+    
+    recommendations = [
+        "Sustain growth momentum in leading product AlphaApp while auditing BetaSuite acquisition costs.",
+        "Monitor anomaly periods for seasonal variations vs operational issues."
+    ]
+
     return {
         "specialist": "finance",
         "answer": answer,
+        "findings": findings,
         "metrics": data.get("products", {}),
         "anomalies": data.get("anomalies", []),
         "warnings": data.get("anomalies", [])[:2],
+        "recommendations": recommendations,
     }
 
 

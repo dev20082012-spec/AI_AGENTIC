@@ -99,6 +99,7 @@ export default function ChatPage() {
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   const meta = SPECIALIST_META[specialist];
   const history = (conversations && conversations[specialist]) || [];
@@ -125,11 +126,10 @@ export default function ChatPage() {
     const text = (textToSend || inputValue).trim();
     if (!text || loading) return;
 
+    const currentRequestId = ++requestIdRef.current;
     setInputValue("");
 
-    // Snapshot history BEFORE adding the new user message — this is what the
-    // backend receives as prior context (the conversation so far, not including
-    // the message we're about to send, which the backend gets as `message`)
+    // Snapshot history BEFORE adding the new user message
     const historySnapshot = [...history];
 
     const userMsg = { role: "user", content: text };
@@ -153,18 +153,25 @@ export default function ChatPage() {
       }
 
       const data = await response.json();
+
+      // Discard response if a newer request was dispatched in the meantime
+      if (currentRequestId !== requestIdRef.current) return;
+
       addMessage(specialist, {
         role: "assistant",
         content: data.response || "No response received.",
         specialists_used: data.specialists_used || [],
       });
     } catch (err) {
+      if (currentRequestId !== requestIdRef.current) return;
       addMessage(specialist, {
         role: "assistant",
         content: `**Error:** Failed to get response from ${meta.name}. (${err.message}). Please try again.`,
       });
     } finally {
-      setLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 

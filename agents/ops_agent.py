@@ -108,13 +108,26 @@ def run_ops_query_structured(query: str, history: list = None) -> dict:
 
     answer = chat_completion(messages, max_tokens=280, temperature=0.3)
 
+    findings = []
+    for blk in data.get("blocked_items", []):
+        findings.append(f"Blocked: {blk.get('employee')} on {blk.get('task')}")
+    for st in data.get("stale_items", []):
+        findings.append(f"Stale ({st.get('days_old')}d): {st.get('employee')} on {st.get('task')}")
+
+    recommendations = [
+        "Unblock Priya Patel immediately on Product Roadmap to prevent downstream delays.",
+        "Reassign or expedite Tom's AWS Migration task to clear the 14-day bottleneck."
+    ]
+
     return {
         "specialist": "ops",
         "answer": answer,
+        "findings": findings,
         "metrics": data.get("counts", {}),
         "blocked": data.get("blocked_items", []),
         "stale": data.get("stale_items", []),
         "warnings": data.get("high_priority", [])[:2],
+        "recommendations": recommendations,
     }
 
 

@@ -47,14 +47,14 @@ def _check_env(var: str, hint: str = ""):
     return val
 
 
-def _call_groq(messages: list[dict], model: str = None, max_tokens: int = 400, temperature: float = 0.3) -> str:
+def _call_groq(messages: list[dict], model: str = None, max_tokens: int = 400, temperature: float = 0.3) -> tuple[str, str]:
     groq_key = _check_env("GROQ_API_KEY", "Add GROQ_API_KEY to your backend .env file")
     primary_target = model or PRIMARY_MODEL
-    # Multi-model pool on Groq: if qwen3.8 hits OTPM, immediately try qwen3.6
+
+    # If primary target is qwen3.8, allow qwen3.6 as a same-provider capacity fallback on 429
     models_to_try = [primary_target]
-    for alt in ["qwen/qwen3.6-27b", "openai/gpt-oss-120b"]:
-        if alt not in models_to_try:
-            models_to_try.append(alt)
+    if primary_target == "qwen/qwen3.8-27b":
+        models_to_try.append("qwen/qwen3.6-27b")
 
     headers = {
         "Authorization": f"Bearer {groq_key}",
@@ -73,7 +73,7 @@ def _call_groq(messages: list[dict], model: str = None, max_tokens: int = 400, t
         for attempt in range(1, 3):
             try:
                 resp = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30)
-            except Exception as e:
+            except requests.exceptions.RequestException as e:
                 last_err = str(e)
                 continue
 
@@ -82,11 +82,16 @@ def _call_groq(messages: list[dict], model: str = None, max_tokens: int = 400, t
                 msg = data.get("choices", [{}])[0].get("message", {})
                 content = (msg.get("content") or msg.get("reasoning") or "").strip()
                 if content:
-                    return content
+                    return content, target_model
+
+            # Strictly do not retry or catch client/auth errors (401, 403, 400)
+            if resp.status_code in (401, 403, 400):
+                resp.raise_for_status()
 
             err_text = resp.text[:250]
             last_err = f"Groq error HTTP {resp.status_code}: {err_text}"
 
+            # Transient 429: wait if requested and retry once
             if resp.status_code == 429 and attempt == 1:
                 import re
                 m_ms = re.search(r"in (\d+)ms", err_text)
@@ -99,19 +104,23 @@ def _call_groq(messages: list[dict], model: str = None, max_tokens: int = 400, t
                 time.sleep(min(max(wait_s, 0.5), 3.5))
                 continue
 
-            # On persistent 429 or 5xx, break inner loop to try next Groq model
+            # Break inner loop on 429/5xx to try next candidate model
             break
 
     raise TransientProviderError(last_err or "All Groq models failed")
 
 
-def _call_openrouter(messages: list[dict], model: str = None, max_tokens: int = 350, temperature: float = 0.3) -> str:
+def _call_openrouter(messages: list[dict], model: str = None, max_tokens: int = 350, temperature: float = 0.3) -> tuple[str, str]:
     or_key = _check_env("OPENROUTER_API_KEY", "Add OPENROUTER_API_KEY to your backend .env file")
-    primary_model = model or FALLBACK_MODEL
-    models_to_try = [primary_model]
-    for alt in ["nvidia/nemotron-3.5-lightning:free", "liquid/lfm-2.5-2.6b:free", "openrouter/auto"]:
-        if alt not in models_to_try:
-            models_to_try.append(alt)
+    # Clean slug without any accidental duplicate provider prefix
+    target_model = (model or FALLBACK_MODEL).strip()
+    if target_model.startswith("openrouter/"):
+        target_model = target_model[len("openrouter/"):]
+
+    # Use specified fallback model, falling back to openrouter/auto only if primary fails
+    models_to_try = [target_model]
+    if target_model != "openrouter/auto":
+        models_to_try.append("openrouter/auto")
 
     headers = {
         "Authorization": f"Bearer {or_key}",
@@ -121,29 +130,35 @@ def _call_openrouter(messages: list[dict], model: str = None, max_tokens: int = 
     }
 
     last_err = None
-    for target_model in models_to_try:
+    for model_slug in models_to_try:
         payload = {
-            "model": target_model,
+            "model": model_slug,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
         try:
             resp = requests.post(OPENROUTER_API_URL, headers=headers, json=payload, timeout=30)
-            if resp.status_code == 200:
-                data = resp.json()
-                msg = data.get("choices", [{}])[0].get("message", {})
-                content = (msg.get("content") or msg.get("reasoning") or "").strip()
-                if content:
-                    return content
-                last_err = f"Model {target_model} returned empty content"
-                continue
-            last_err = f"Model {target_model} HTTP {resp.status_code}: {resp.text[:120]}"
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             last_err = str(e)
             continue
 
-    raise RuntimeError(f"All OpenRouter models failed. Last: {last_err}")
+        if resp.status_code == 200:
+            data = resp.json()
+            msg = data.get("choices", [{}])[0].get("message", {})
+            content = (msg.get("content") or msg.get("reasoning") or "").strip()
+            if content:
+                return content, model_slug
+            last_err = f"Model {model_slug} returned empty content"
+            continue
+
+        # Strictly do not retry or catch client/auth errors (401, 403, 400)
+        if resp.status_code in (401, 403, 400):
+            resp.raise_for_status()
+
+        last_err = f"Model {model_slug} HTTP {resp.status_code}: {resp.text[:120]}"
+
+    raise TransientProviderError(f"All OpenRouter models failed. Last: {last_err}")
 
 
 class TransientProviderError(Exception):
@@ -166,29 +181,33 @@ def chat_completion(
     """
     primary_err = None
     provider_used = PRIMARY_PROVIDER
+    model_used = model or PRIMARY_MODEL
 
     # 1. Try Primary Provider
     try:
         if PRIMARY_PROVIDER == "groq":
-            res = _call_groq(messages, model=model, max_tokens=max_tokens, temperature=temperature)
-            return (res, provider_used) if return_meta else res
+            res, model_used = _call_groq(messages, model=model, max_tokens=max_tokens, temperature=temperature)
+            meta = {"provider": provider_used, "model": model_used}
+            return (res, meta) if return_meta else res
         elif PRIMARY_PROVIDER == "openrouter":
-            res = _call_openrouter(messages, model=model, max_tokens=max_tokens, temperature=temperature)
-            return (res, provider_used) if return_meta else res
+            res, model_used = _call_openrouter(messages, model=model, max_tokens=max_tokens, temperature=temperature)
+            meta = {"provider": provider_used, "model": model_used}
+            return (res, meta) if return_meta else res
     except (TransientProviderError, requests.exceptions.RequestException) as e:
         primary_err = e
         print(f"  [!] Primary provider ({PRIMARY_PROVIDER}) transient error: {e}. Attempting fallback...")
 
-    # 2. Try Fallback Provider (OpenRouter or Groq alternate)
+    # 2. Try Fallback Provider (OpenRouter)
     if FALLBACK_PROVIDER and os.environ.get("OPENROUTER_API_KEY"):
         try:
             provider_used = FALLBACK_PROVIDER
             print(f"  [>>] Failover activated -> using {FALLBACK_PROVIDER} ({FALLBACK_MODEL})")
             if FALLBACK_PROVIDER == "openrouter":
-                res = _call_openrouter(messages, model=FALLBACK_MODEL, max_tokens=max_tokens, temperature=temperature)
+                res, model_used = _call_openrouter(messages, model=FALLBACK_MODEL, max_tokens=max_tokens, temperature=temperature)
             else:
-                res = _call_groq(messages, model=PRIMARY_MODEL, max_tokens=max_tokens, temperature=temperature)
-            return (res, provider_used) if return_meta else res
+                res, model_used = _call_groq(messages, model=PRIMARY_MODEL, max_tokens=max_tokens, temperature=temperature)
+            meta = {"provider": provider_used, "model": model_used}
+            return (res, meta) if return_meta else res
         except Exception as fb_err:
             raise RuntimeError(
                 f"Both primary ({PRIMARY_PROVIDER}: {primary_err}) and fallback ({FALLBACK_PROVIDER}: {fb_err}) failed."

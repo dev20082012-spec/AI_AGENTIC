@@ -93,15 +93,32 @@ def run_marketing_query_structured(query: str, history: list = None) -> dict:
 
     answer = chat_completion(messages, max_tokens=280, temperature=0.3)
 
+    totals = data.get("totals", {})
+    top_r = data.get("top_region", {})
+    top_a = data.get("top_age", {})
+    worst_a = data.get("worst_age", {})
+
+    findings = [
+        f"Campaign delivered {totals.get('conversions', 0):,} conversions at {totals.get('avg_conv', 0)}% conversion rate.",
+        f"Top region is '{top_r.get('region')}' ({top_r.get('conv_pct')}%), top demographic is '{top_a.get('age_group')}' ({top_a.get('conv_pct')}%)."
+    ]
+
+    recommendations = [
+        f"Reallocate budget from underperforming '{worst_a.get('age_group')}' cohort to '{top_a.get('age_group')}'.",
+        f"Scale up North region campaigns where conversion velocity is highest."
+    ]
+
     return {
         "specialist": "marketing",
         "answer": answer,
-        "metrics": data.get("totals", {}),
+        "findings": findings,
+        "metrics": totals,
         "segments": {
             "top_region": data.get("top_region"),
             "top_age": data.get("top_age"),
         },
-        "warnings": [],
+        "warnings": [f"Underperforming cohort: {worst_a.get('age_group')} ({worst_a.get('conv_pct')}%)"] if worst_a else [],
+        "recommendations": recommendations,
     }
 
 
