@@ -12,7 +12,7 @@ def _load_and_analyze() -> str:
         df["month"] = pd.to_datetime(df["month"])
         df = df.sort_values(["product", "month"])
 
-        lines = ["=== SALES DATA SUMMARY ==="]
+        lines = ["=== SALES SUMMARY ==="]
         anomalies = []
 
         for product, grp in df.groupby("product"):
@@ -28,10 +28,10 @@ def _load_and_analyze() -> str:
             next_q = [round(max(m * (5 + i) + b, 0), 0) for i in range(1, 4)]
 
             lines.append(
-                f"\n{product}: ${first:,.0f} -> ${last:,.0f} "
-                f"(+{total_growth}% over {len(grp)} months, avg MoM: +{avg_mom}%)"
+                f"{product}: ${first:,.0f} -> ${last:,.0f} "
+                f"(+{total_growth}%, avg MoM: +{avg_mom}%). "
+                f"3M Forecast: ${next_q[0]:,.0f} / ${next_q[1]:,.0f} / ${next_q[2]:,.0f}"
             )
-            lines.append(f"  Forecast next 3 months: ${next_q[0]:,.0f} / ${next_q[1]:,.0f} / ${next_q[2]:,.0f}")
 
             mean_r, std_r = revenues.mean(), revenues.std()
             for _, row in grp.iterrows():
@@ -40,13 +40,12 @@ def _load_and_analyze() -> str:
                     dev = round(((rev - mean_r) / mean_r) * 100, 1)
                     atype = "SPIKE" if rev > mean_r else "DROP"
                     anomalies.append(
-                        f"  {product} {row['month'].strftime('%Y-%m')}: {atype} "
+                        f"{product} {row['month'].strftime('%Y-%m')}: {atype} "
                         f"${rev:,.0f} vs mean ${mean_r:,.0f} ({dev:+.1f}%)"
                     )
 
         if anomalies:
-            lines.append("\nANOMALIES DETECTED:")
-            lines.extend(anomalies)
+            lines.append("Anomalies: " + "; ".join(anomalies))
 
         return "\n".join(lines)
 
@@ -56,26 +55,37 @@ def _load_and_analyze() -> str:
         return f"ERROR computing finance data: {e}"
 
 
-def run_finance_query(query: str) -> str:
+def run_finance_query(query: str, history: list = None) -> str:
     from groq import Groq
     data_summary = _load_and_analyze()
-    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    client = Groq(api_key=os.environ["GROQ_API_KEY"], max_retries=5)
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Financial analyst. Provide concise metrics and key takeaways from the financial summary in 2-3 short bullets (under 75 words total)."
+            ),
+        }
+    ]
+
+    if history:
+        for msg in history:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+
+    user_content = f"{query}\n\n[Financial Context]\n{data_summary}"
+    messages.append({"role": "user", "content": user_content})
+
     resp = client.chat.completions.create(
         model="qwen/qwen3.8-27b",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a financial analyst. Given sales data, answer the query concisely "
-                    "with specific numbers. Max 3 bullet points. Be brief."
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"Query: {query}\n\n{data_summary}",
-            },
-        ],
-        max_tokens=400,
+        messages=messages,
+        max_tokens=200,
         temperature=0.2,
     )
     return resp.choices[0].message.content.strip()
+
+
+finance_agent = run_finance_query

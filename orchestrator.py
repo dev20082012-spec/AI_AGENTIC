@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import re
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -46,14 +47,32 @@ _last_run_details = {
 }
 
 
+def _call_with_ratelimit_retry(fn, *args, **kwargs):
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            err_msg = f"{str(e)} {getattr(e, '__cause__', '')} {repr(e)}"
+            is_ratelimit = any(w in err_msg.lower() for w in ["rate limit", "ratelimit", "429", "eventloop"])
+            if is_ratelimit and attempt < max_attempts:
+                match = re.search(r"try again in ([0-9.]+)s", err_msg, re.IGNORECASE)
+                if not match:
+                    match = re.search(r"in ([0-9.]+)s", err_msg, re.IGNORECASE)
+                wait_sec = float(match.group(1)) + 1.0 if match else 6.0
+                print(f"  [!] Rate limit reached. Auto-retrying in {wait_sec:.1f}s (Attempt {attempt}/{max_attempts})...")
+                time.sleep(wait_sec)
+            else:
+                raise
+
+
 def _timed_specialist(name: str, fn, query: str) -> str:
     _call_count["n"] += 1
     if _call_count["n"] > 1:
-        wait = 3
-        print(f"  [..] Rate limit cooldown ({wait}s)...")
+        wait = 1
         time.sleep(wait)
     print(f"\n  [>>] [Orchestrator] -> {name} specialist")
-    result = fn(query)
+    result = _call_with_ratelimit_retry(fn, query)
     print(f"  [OK] [Orchestrator] <- {name} specialist responded")
 
     key = name.lower()
@@ -87,11 +106,13 @@ def marketing_specialist(query: str) -> str:
 orchestrator = Agent(
     model=get_model(),
     system_prompt=(
-        "You are Chief of Staff. Call the right specialist(s) then write ONE concise briefing.\n"
-        "- finance_specialist: revenue, sales, forecasts, anomalies\n"
-        "- ops_specialist: team tasks, blockers, scheduling\n"
-        "- marketing_specialist: campaigns, CTR, ad performance\n"
-        "Use real numbers from specialist responses. End with 3 Key Actions."
+        "You are Chief of Staff. Call all 3 specialist tools (finance_specialist, ops_specialist, marketing_specialist) to gather data.\n"
+        "Synthesize their reports into a concise briefing:\n"
+        "- Finance: 1-2 bullet points\n"
+        "- Operations: 1-2 bullet points\n"
+        "- Marketing: 1-2 bullet points\n"
+        "- Key Actions: 3 numbered actions\n"
+        "Keep the full response under 150 words."
     ),
     tools=[finance_specialist, ops_specialist, marketing_specialist],
 )
@@ -118,7 +139,7 @@ def run_briefing(query: str) -> str:
     print(f"{'-'*70}")
     print("[Orchestrator] Analysing and delegating to specialists...\n")
 
-    response = str(orchestrator(query))
+    response = str(_call_with_ratelimit_retry(orchestrator, query))
 
     print(f"\n{'='*70}")
     print("SYNTHESIZED BRIEFING")

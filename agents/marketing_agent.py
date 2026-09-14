@@ -9,49 +9,31 @@ def _load_and_analyze() -> str:
     try:
         df = pd.read_csv(_CAMPAIGN_CSV)
 
-        def rank_by(col):
+        total_imp = df["impressions"].sum()
+        total_clicks = df["clicks"].sum()
+        total_conv = df["conversions"].sum()
+        avg_ctr = round((total_clicks / total_imp) * 100, 2)
+        avg_conv = round((total_conv / total_clicks) * 100, 2)
+
+        def rank_col(col):
             agg = df.groupby(col).agg(
-                impressions=("impressions", "sum"),
                 clicks=("clicks", "sum"),
                 conversions=("conversions", "sum"),
             ).reset_index()
-            agg["ctr_pct"] = (agg["clicks"] / agg["impressions"] * 100).round(2)
             agg["conv_pct"] = (agg["conversions"] / agg["clicks"] * 100).round(2)
             return agg.sort_values("conv_pct", ascending=False)
 
-        regions = rank_by("region")
-        age_groups = rank_by("age_group")
+        reg = rank_col("region")
+        age = rank_col("age_group")
 
-        lines = ["=== CAMPAIGN PERFORMANCE SUMMARY ==="]
+        best_r, worst_r = reg.iloc[0], reg.iloc[-1]
+        best_a, worst_a = age.iloc[0], age.iloc[-1]
 
-        lines.append("\nBy Region (ranked by conversion rate):")
-        for _, row in regions.iterrows():
-            lines.append(
-                f"  {row['region']}: conv={row['conv_pct']}%, CTR={row['ctr_pct']}%, "
-                f"conversions={int(row['conversions']):,}"
-            )
-
-        lines.append("\nBy Age Group (ranked by conversion rate):")
-        for _, row in age_groups.iterrows():
-            lines.append(
-                f"  {row['age_group']}: conv={row['conv_pct']}%, CTR={row['ctr_pct']}%, "
-                f"conversions={int(row['conversions']):,}"
-            )
-
-        best_r = regions.iloc[0]
-        worst_r = regions.iloc[-1]
-        best_a = age_groups.iloc[0]
-        worst_a = age_groups.iloc[-1]
-
-        lines.append(
-            f"\nTOP: Region='{best_r['region']}' ({best_r['conv_pct']}% conv) | "
-            f"Age='{best_a['age_group']}' ({best_a['conv_pct']}% conv)"
-        )
-        lines.append(
-            f"WORST: Region='{worst_r['region']}' ({worst_r['conv_pct']}% conv) | "
-            f"Age='{worst_a['age_group']}' ({worst_a['conv_pct']}% conv)"
-        )
-
+        lines = [
+            f"Campaign Totals: Conversions={total_conv:,}, Avg CTR={avg_ctr}%, Avg Conv={avg_conv}%",
+            f"Top Segments: Region='{best_r['region']}' ({best_r['conv_pct']}% conv, {int(best_r['conversions']):,} conv) | Age='{best_a['age_group']}' ({best_a['conv_pct']}% conv)",
+            f"Lowest Segments: Region='{worst_r['region']}' ({worst_r['conv_pct']}% conv) | Age='{worst_a['age_group']}' ({worst_a['conv_pct']}% conv)",
+        ]
         return "\n".join(lines)
 
     except FileNotFoundError:
@@ -60,26 +42,49 @@ def _load_and_analyze() -> str:
         return f"ERROR computing campaign data: {e}"
 
 
-def run_marketing_query(query: str) -> str:
+def run_marketing_query(query: str, history: list = None) -> str:
     from groq import Groq
     data_summary = _load_and_analyze()
-    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    client = Groq(api_key=os.environ["GROQ_API_KEY"], max_retries=5)
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Marketing analyst. Summarize conversion rates, CTR, and segment insights in 2-3 short bullets (under 75 words total)."
+            ),
+        }
+    ]
+
+    if history:
+        for msg in history:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+
+    user_content = f"{query}\n\n[Marketing Context]\n{data_summary}"
+    messages.append({"role": "user", "content": user_content})
+
     resp = client.chat.completions.create(
         model="qwen/qwen3.8-27b",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a market research analyst. Answer the query using the campaign data. "
-                    "Give a direct recommendation with specific numbers. Max 3 bullet points. Be brief."
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"Query: {query}\n\n{data_summary}",
-            },
-        ],
-        max_tokens=400,
+        messages=messages,
+        max_tokens=200,
         temperature=0.2,
     )
     return resp.choices[0].message.content.strip()
+
+
+def load_campaign_data():
+    return pd.read_csv(_CAMPAIGN_CSV)
+
+
+def analyze_segment_performance():
+    return _load_and_analyze()
+
+
+def summarize_market_impact():
+    return _load_and_analyze()
+
+
+marketing_agent = run_marketing_query
