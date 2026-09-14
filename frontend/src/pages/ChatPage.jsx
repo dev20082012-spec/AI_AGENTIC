@@ -22,6 +22,22 @@ import {
 
 
 const SPECIALIST_META = {
+  executive: {
+    name: "Chief of Staff",
+    shortName: "Chief of Staff",
+    role: "Conversational Executive AI & Multi-Agent Coordinator",
+    icon: Sparkles,
+    accent: "indigo",
+    borderGlow: "border-indigo-500/40",
+    bgBadge: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
+    userBubble: "bg-indigo-950/40 border-indigo-700/50 text-indigo-100",
+    agentBubble: "bg-slate-900 border-slate-800 text-slate-100",
+    starters: [
+      "How are sales performing across our products?",
+      "What should I focus on this week across all departments?",
+      "Could operational bottlenecks explain any revenue trends?",
+    ],
+  },
   finance: {
     name: "Finance Specialist",
     shortName: "Finance",
@@ -140,6 +156,7 @@ export default function ChatPage() {
       addMessage(specialist, {
         role: "assistant",
         content: data.response || "No response received.",
+        specialists_used: data.specialists_used || [],
       });
     } catch (err) {
       addMessage(specialist, {
@@ -270,9 +287,30 @@ export default function ChatPage() {
                   {isUser ? (
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                   ) : (
-                    <div className="prose prose-invert prose-xs md:prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0.5">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    </div>
+                    <>
+                      {msg.specialists_used && msg.specialists_used.length > 0 && (
+                        <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Consulted:</span>
+                          {msg.specialists_used.map((s) => {
+                            const badgeStyle =
+                              s === "finance" ? "bg-teal-500/15 text-teal-300 border-teal-500/30" :
+                              s === "ops" ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/30" :
+                              "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+                            const label =
+                              s === "finance" ? "Finance" :
+                              s === "ops" ? "Operations" : "Marketing";
+                            return (
+                              <span key={s} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeStyle}`}>
+                                {label} Specialist
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="prose prose-invert prose-xs md:prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0.5">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    </>
                   )}
 
                   {/* Copy button on hover */}

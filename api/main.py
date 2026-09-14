@@ -77,6 +77,12 @@ class ChatResponse(BaseModel):
     response: str
 
 
+class ExecutiveChatResponse(BaseModel):
+    response: str
+    specialists_used: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+
+
 # ── API routes ────────────────────────────────────────────────────────────────
 @app.get("/api/health")
 @app.get("/health")
@@ -99,14 +105,33 @@ def get_briefing(request: BriefingRequest):
         )
 
 
-@app.post("/api/chat/{specialist}", response_model=ChatResponse)
-@app.post("/chat/{specialist}", response_model=ChatResponse)
+@app.post("/api/chat/executive", response_model=ExecutiveChatResponse)
+@app.post("/chat/executive", response_model=ExecutiveChatResponse)
+def chat_executive(request: ChatRequest):
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
+    from executive_agent import run_executive_turn
+    history_dicts = [{"role": m.role, "content": m.content} for m in request.history]
+    try:
+        return run_executive_turn(request.message, history=history_dicts)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Executive Chief of Staff failed: {str(e)}",
+        )
+
+
+@app.post("/api/chat/{specialist}")
+@app.post("/chat/{specialist}")
 def chat_specialist(specialist: str, request: ChatRequest):
     spec = specialist.lower().strip()
+    if spec == "executive":
+        return chat_executive(request)
+
     if spec not in ("finance", "ops", "marketing"):
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown specialist '{specialist}'. Valid options: finance, ops, marketing.",
+            detail=f"Unknown specialist '{specialist}'. Valid options: executive, finance, ops, marketing.",
         )
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")

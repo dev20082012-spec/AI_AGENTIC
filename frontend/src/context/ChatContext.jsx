@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 const ChatContext = createContext(null);
 
 const STORAGE_KEYS = {
+  executive: "chat_executive",
   finance: "chat_finance",
   ops: "chat_ops",
   marketing: "chat_marketing",

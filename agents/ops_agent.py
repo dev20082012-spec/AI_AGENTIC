@@ -1,19 +1,23 @@
 import os
 import json
 from datetime import datetime, date
+from model import chat_completion
 
 _DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 _EMP_JSON = os.path.join(_DATA_DIR, "employee_updates.json")
 _STALE_DAYS = 10
 
 
-def _load_and_analyze() -> str:
+def get_ops_data() -> dict:
+    """Computes exact, deterministic operational task analytics from employee_updates.json."""
     try:
         with open(_EMP_JSON, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         today = date.today()
         counts = {"done": 0, "in_progress": 0, "pending": 0, "blocked": 0}
+        blocked_items = []
+        stale_items = []
         high_priority = []
         active_highlights = []
 
@@ -36,8 +40,10 @@ def _load_and_analyze() -> str:
             reasons = []
             if status == "blocked":
                 reasons.append("BLOCKED")
+                blocked_items.append({"employee": employee, "task": task, "notes": notes})
             if days_old is not None and days_old >= _STALE_DAYS and status != "done":
                 reasons.append(f"STALE ({days_old}d)")
+                stale_items.append({"employee": employee, "task": task, "days_old": days_old, "notes": notes})
 
             if reasons:
                 high_priority.append(f"[{' + '.join(reasons)}] {employee}: {task} ({notes[:60]})")
@@ -52,26 +58,40 @@ def _load_and_analyze() -> str:
         if active_highlights:
             lines.append("Key Active:\n  - " + "\n  - ".join(active_highlights))
 
-        return "\n".join(lines)
+        return {
+            "counts": counts,
+            "blocked_items": blocked_items,
+            "stale_items": stale_items,
+            "high_priority": high_priority,
+            "active_highlights": active_highlights,
+            "summary_text": "\n".join(lines),
+            "status": "ok",
+        }
 
     except FileNotFoundError:
-        return f"ERROR: {_EMP_JSON} not found."
+        return {"status": "error", "error": f"{_EMP_JSON} not found.", "summary_text": "Operations data unavailable."}
     except Exception as e:
-        return f"ERROR computing ops data: {e}"
+        return {"status": "error", "error": str(e), "summary_text": f"Error computing ops data: {e}"}
 
 
-def run_ops_query(query: str, history: list = None) -> str:
-    from groq import Groq
-    data_summary = _load_and_analyze()
-    client = Groq(api_key=os.environ["GROQ_API_KEY"], max_retries=5)
+def _load_and_analyze() -> str:
+    data = get_ops_data()
+    return data.get("summary_text", "")
 
-    # Data context embedded in system message once — not repeated every user turn
+
+def run_ops_query_structured(query: str, history: list = None) -> dict:
+    """Executes an operations query returning structured findings, blockers, and conversational answer."""
+    data = get_ops_data()
+    data_summary = data.get("summary_text", "")
+
     messages = [
         {
             "role": "system",
             "content": (
-                "You are an operations manager. Use ONLY the data below to answer questions. "
-                "Be concise — 2-3 bullets, under 80 words. Highlight blockers and stale items.\n\n"
+                "You are the Operations Specialist for an executive business intelligence system. "
+                "Use ONLY the operational task data below to answer questions. "
+                "Highlight blockers, bottlenecks, stale deadlines, and team assignments directly. "
+                "Do NOT fabricate tasks or employee names outside this dataset.\n\n"
                 f"[Ops Task Data]\n{data_summary}"
             ),
         }
@@ -86,13 +106,22 @@ def run_ops_query(query: str, history: list = None) -> str:
 
     messages.append({"role": "user", "content": query})
 
-    resp = client.chat.completions.create(
-        model="qwen/qwen3.8-27b",
-        messages=messages,
-        max_tokens=200,
-        temperature=0.3,
-    )
-    return resp.choices[0].message.content.strip()
+    answer = chat_completion(messages, max_tokens=280, temperature=0.3)
+
+    return {
+        "specialist": "ops",
+        "answer": answer,
+        "metrics": data.get("counts", {}),
+        "blocked": data.get("blocked_items", []),
+        "stale": data.get("stale_items", []),
+        "warnings": data.get("high_priority", [])[:2],
+    }
+
+
+def run_ops_query(query: str, history: list = None) -> str:
+    """Maintains backward compatibility returning pure text answer."""
+    res = run_ops_query_structured(query, history=history)
+    return res["answer"]
 
 
 def load_employee_updates():

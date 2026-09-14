@@ -96,6 +96,51 @@ export default function LandingPage() {
           </p>
         </div>
 
+        {/* Flagship Conversational Chief of Staff Spotlight Card */}
+        <div className="mb-8">
+          <Link
+            to="/chat/executive"
+            className="group relative block rounded-2xl bg-gradient-to-r from-indigo-950/70 via-slate-900/90 to-teal-950/50 border border-indigo-500/40 hover:border-indigo-400/70 p-6 md:p-8 transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-indigo-500/15 shadow-xl"
+          >
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="flex items-start gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-teal-400 to-cyan-500 flex items-center justify-center text-slate-950 shrink-0 shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                  <Sparkles className="w-7 h-7" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <h2 className="text-xl md:text-2xl font-black text-white group-hover:text-indigo-200 transition-colors">
+                      Chief of Staff — Interactive Executive AI
+                    </h2>
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                      Flagship Coordinator
+                    </span>
+                    {(conversations.executive || []).length > 0 ? (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800/80 text-teal-300 border border-teal-500/30">
+                        {(conversations.executive || []).length} message{(conversations.executive || []).length > 1 ? "s" : ""}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-400 border border-slate-700">
+                        Ready to Chat
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-300 leading-relaxed max-w-3xl">
+                    Dynamic multi-turn executive agent. Routes to Finance, Operations, and Marketing on demand, retains conversation context across follow-ups, and synthesizes cross-domain business intelligence.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
+                <div className="text-xs font-semibold px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-teal-500 hover:from-indigo-400 hover:to-teal-400 text-slate-950 font-bold flex items-center gap-2 transition-all shadow-md shadow-indigo-500/25">
+                  <span>Open Executive Chat</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            </div>
+          </Link>
+        </div>
+
         {/* 4 Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* 3 Specialist Cards */}
