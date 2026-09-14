@@ -14,176 +14,126 @@
 
 > **Ask one question. Get three expert answers. Instantly.**
 >
-> AGentic Resolve is a multi-agent professional assistant that orchestrates specialized AI agents in parallel —
-> giving you a unified, decision-ready briefing across Finance, Operations, and Marketing in seconds.
+> AGentic Resolve is a multi-agent professional assistant that orchestrates specialized AI agents
+> in parallel, giving you a unified, decision-ready briefing across Finance, Operations,
+> and Marketing in seconds.
 
 </div>
 
 ---
 
-## 🎯 What is AGentic Resolve?
+## What is AGentic Resolve?
 
-AGentic Resolve acts as the **intelligent command center** for your business. Powered by the [Strands Agents SDK](https://github.com/strands-agents/sdk-python) and running on **Amazon Bedrock (Claude Sonnet 5)**, it routes your business query through an orchestrator that dispatches three specialist sub-agents — all working in **parallel** — before synthesizing their insights into one crisp, actionable briefing.
+AGentic Resolve acts as the **intelligent command center** for your business.
+Powered by the [Strands Agents SDK](https://github.com/strands-agents/sdk-python)
+and running on **Amazon Bedrock (Claude Sonnet 5)**, it routes your business query through
+an orchestrator that dispatches three specialist sub-agents — all working in **parallel** —
+before synthesizing their insights into one crisp, actionable briefing.
 
-Built for the **[Agents for Humans Hackathon](https://agentsforhumans.devpost.com/)** — Professional Agents track. 🏆
+Built for the **[Agents for Humans Hackathon](https://agentsforhumans.devpost.com/)** —
+Professional Agents track.
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 | Feature | Description |
 |---|---|
-| 🧠 **Orchestrator Agent** | Single entry point — understands your query and delegates intelligently |
-| ⚡ **Parallel Execution** | All three specialists run simultaneously — no waiting in line |
-| 💰 **Finance Agent** | Revenue trend analysis, forecasting, historical sales insights |
-| 🗓️ **Operations Agent** | Scheduling automation, email drafting, employee update summaries |
-| 📣 **Marketing Agent** | Ad impact analysis, regional & demographic campaign performance |
-| 📋 **Unified Briefing** | All specialist outputs synthesized into one decision-ready response |
+| Orchestrator Agent | Single entry point — understands your query and delegates intelligently |
+| Parallel Execution | All three specialists run and respond before synthesis |
+| Finance Agent | Revenue trend analysis, forecasting, historical sales insights |
+| Operations Agent | Scheduling automation, email drafting, employee update summaries |
+| Marketing Agent | Ad impact analysis, regional and demographic campaign performance |
+| Unified Briefing | All specialist outputs synthesized into one decision-ready response |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
-### System Flowchart
-
-```mermaid
-flowchart TD
-    U(["👤 User / Business Analyst"]):::user
-    O["🧠 Orchestrator Agent\nClaude Sonnet 5 via Bedrock"]:::orchestrator
-
-    U -->|"Natural language query"| O
-
-    O -->|"Delegates via agents-as-tools"| F
-    O -->|"Delegates via agents-as-tools"| Ops
-    O -->|"Delegates via agents-as-tools"| M
-
-    subgraph PARALLEL ["⚡ Parallel Specialist Agents"]
-        direction TB
-        F["💰 Finance Agent\nfinance_specialist tool"]:::finance
-        Ops["🗓️ Operations Agent\nops_specialist tool"]:::ops
-        M["📣 Marketing Agent\nmarketing_specialist tool"]:::marketing
-    end
-
-    subgraph TOOLS_F ["Finance Tools"]
-        F --> F1["📈 Revenue Trend Analysis"]
-        F --> F2["🔮 Sales Forecasting"]
-        F --> F3["🗂️ Historical Data - sales_sample.csv"]
-    end
-
-    subgraph TOOLS_O ["Operations Tools"]
-        Ops --> O1["📅 Schedule Automation"]
-        Ops --> O2["✉️ Email Draft Generator"]
-        Ops --> O3["📝 Employee Updates - employee_updates.json"]
-    end
-
-    subgraph TOOLS_M ["Marketing Tools"]
-        M --> M1["🌍 Regional Campaign Analysis"]
-        M --> M2["👥 Demographic Targeting Insights"]
-        M --> M3["📊 Ad Impact Data - campaign_sample.csv"]
-    end
-
-    F --> R["📋 Orchestrator Synthesizes All Results"]
-    Ops --> R
-    M --> R
-    R --> U2(["✅ Unified Decision-Ready Briefing"]):::output
-
-    classDef user fill:#4F46E5,color:#fff,stroke:#3730A3
-    classDef orchestrator fill:#7C3AED,color:#fff,stroke:#5B21B6
-    classDef finance fill:#059669,color:#fff,stroke:#047857
-    classDef ops fill:#D97706,color:#fff,stroke:#B45309
-    classDef marketing fill:#DB2777,color:#fff,stroke:#BE185D
-    classDef output fill:#0EA5E9,color:#fff,stroke:#0284C7
-```
-
-### Flow Summary
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full Mermaid flowchart.
 
 ```
-👤 User Query
-    └─▶ 🧠 Orchestrator Agent
-            ├─▶ 💰 finance_specialist   ──▶ Sales data + forecasting
-            ├─▶ 🗓️ ops_specialist       ──▶ Schedules + email drafts + updates
-            └─▶ 📣 marketing_specialist ──▶ Campaign + regional + demographic data
-                        │
-                        └─▶ 📋 Synthesized Briefing ──▶ ✅ Decision-Ready Output
+User Query
+  --> Orchestrator Agent (Claude Sonnet 5 / Bedrock)
+        |--> finance_specialist   --> Revenue trends, forecasts, anomalies
+        |--> ops_specialist       --> Team status, blockers, email drafts
+        `--> marketing_specialist --> Campaign analysis, segment rankings
+                    |
+                    `--> Synthesized Executive Briefing --> User
 ```
-
-> 📄 For the complete technical diagram, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ---
 
-## 🤖 The Specialist Agents
+## Specialist Agents
 
-### 💰 Finance Agent — `agents/finance_agent.py`
+### Finance Agent — agents/finance_agent.py
 
-Crunches your numbers and looks ahead:
-- 📈 Revenue trend analysis across product lines
-- 🔮 Sales forecasting based on historical patterns
-- 📊 Market activity monitoring
-- 🗂️ Powered by `data/sales_sample.csv`
+- Revenue trend analysis across product lines (month-over-month)
+- Sales forecasting via linear regression on trailing 6 months
+- Anomaly detection: flags spikes/drops beyond 2-sigma threshold
+- Powered by data/sales_sample.csv
 
-### 🗓️ Operations Agent — `agents/ops_agent.py`
+### Operations Agent — agents/ops_agent.py
 
-Handles the operational backbone of your business:
-- 📅 Automated scheduling and calendar management
-- ✉️ Professional email drafting
-- 📝 Summarizing employee work updates and blockers
-- 🗂️ Powered by `data/employee_updates.json`
+- Team task status summary grouped by: done / in_progress / pending / blocked
+- Flags blocked or stale items (no update in 10+ days) as HIGH PRIORITY
+- Professional email draft generator for scheduling requests
+- Powered by data/employee_updates.json
 
-### 📣 Marketing Agent — `agents/marketing_agent.py`
+### Marketing Agent — agents/marketing_agent.py
 
-Decodes what's actually driving growth:
-- 🌍 Regional campaign performance breakdown
-- 👥 Age group and demographic targeting analysis
-- 💡 Ad impact attribution — which campaigns are moving the needle
-- 🗂️ Powered by `data/campaign_sample.csv`
+- CTR and conversion rate by region and age group, ranked best to worst
+- Direct recommendation: which segment to increase investment in, and which to cut
+- Powered by data/campaign_sample.csv
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Technology | Role |
 |---|---|
-| 🐍 **Python 3.10+** | Core runtime |
-| 🤖 **[Strands Agents SDK](https://github.com/strands-agents/sdk-python)** | Multi-agent framework (agents-as-tools pattern) |
-| ☁️ **Amazon Bedrock** | Managed model provider |
-| 🧠 **Claude Sonnet 5** | LLM powering all agents |
+| Python 3.10+ | Core runtime |
+| [Strands Agents SDK](https://github.com/strands-agents/sdk-python) | Multi-agent framework (agents-as-tools) |
+| Amazon Bedrock | Managed model provider |
+| Claude Sonnet 5 | LLM powering all agents |
+| pandas / numpy | Data processing inside tool functions |
 
 ---
 
-## 📦 Project Structure
+## Project Structure
 
 ```
 AI_AGENTIC/
-├── 🤖 agents/
-│   ├── finance_agent.py      # 💰 Revenue trend analysis + forecasting
-│   ├── ops_agent.py          # 🗓️ Scheduling, email drafts, employee updates
-│   └── marketing_agent.py    # 📣 Ad impact + market research
-│
-├── 📊 data/
-│   ├── sales_sample.csv          # 💰 Synthetic sales & revenue data
-│   ├── employee_updates.json     # 🗓️ Synthetic employee work updates
-│   └── campaign_sample.csv       # 📣 Synthetic advertising campaign data
-│
-├── 🧠 orchestrator.py        # Top-level agent, agents-as-tools pattern
-├── ⚙️  model.py               # Shared Amazon Bedrock model configuration
-├── 📋 requirements.txt       # Python dependencies
-├── 🏗️  ARCHITECTURE.md        # Full architecture diagram
-├── 📖 README.md
-└── 📄 LICENSE                # MIT
+|-- agents/
+|   |-- finance_agent.py      # Revenue trend analysis and forecasting
+|   |-- ops_agent.py          # Scheduling, email drafts, employee updates
+|   `-- marketing_agent.py    # Ad impact and market research
+|-- data/
+|   |-- sales_sample.csv          # Synthetic sales and revenue data
+|   |-- employee_updates.json     # Synthetic employee work updates
+|   `-- campaign_sample.csv       # Synthetic advertising campaign data
+|-- orchestrator.py           # Top-level agent, agents-as-tools pattern
+|-- model.py                  # Shared Amazon Bedrock model configuration
+|-- requirements.txt          # Python dependencies
+|-- ARCHITECTURE.md           # Full Mermaid architecture diagram
+|-- README.md
+`-- LICENSE                   # MIT
 ```
+
+> **Note on /data:** All datasets are synthetic sample data standing in for real integrations
+> (accounting/sales APIs, calendar APIs, ad-platform APIs). They are designed to produce
+> realistic, meaningful analysis outputs during the demo.
 
 ---
 
-## 🚀 Getting Started
+## Setup
 
-### 1️⃣ Clone & Set Up Environment
+### 1. Clone and create a virtual environment
 
 ```bash
-# Clone the repository
 git clone <your-repo-url>
 cd AI_AGENTIC
 
-# Create and activate a virtual environment
 python -m venv .venv
 
 # Linux / macOS
@@ -193,15 +143,16 @@ source .venv/bin/activate
 .venv\Scripts\activate
 ```
 
-### 2️⃣ Install Dependencies
+### 2. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3️⃣ Configure AWS Credentials
+### 3. Configure AWS credentials
 
-Make sure your AWS credentials have **Amazon Bedrock** access enabled for **Claude Sonnet 5**.
+You need AWS credentials with Amazon Bedrock access enabled for Claude Sonnet 5
+(`us.anthropic.claude-sonnet-4-5-20251001-v1:0`) in region `us-west-2`.
 
 ```bash
 # Option A: AWS CLI
@@ -213,61 +164,30 @@ export AWS_SECRET_ACCESS_KEY=your_secret
 export AWS_DEFAULT_REGION=us-west-2
 ```
 
-> ⚠️ **Note:** The default region is `us-west-2`. If your Bedrock access is in a different region,
-> update the region and model ID in `model.py`.
+The model ID and region are defined as constants at the top of model.py and can be
+changed in 5 seconds if your Bedrock access is in a different region.
 
-### 4️⃣ Run the Orchestrator
+### 4. Run
 
 ```bash
 python orchestrator.py
 ```
 
-This fires a sample business query through the orchestrator and prints the **combined expert briefing** from all three specialist agents. 🎉
+This fires the sample briefing query through all three specialist agents and prints
+a synthesized executive briefing. Delegation routing is printed to the console in
+real time so you can see which specialist(s) were called.
 
 ---
 
-## 📊 Sample Data
+## License
 
-All datasets in `/data` are **fully synthetic** — generated specifically to demonstrate the agents' reasoning and delegation logic end-to-end with realistic patterns. No real business data is included.
-
-| File | Agent | Contents |
-|---|---|---|
-| `sales_sample.csv` | 💰 Finance | Historical revenue, product performance, time-series trends |
-| `employee_updates.json` | 🗓️ Operations | Team updates, blockers, task statuses |
-| `campaign_sample.csv` | 📣 Marketing | Ad spend, impressions, conversions by region & demographic |
-
----
-
-## 🏆 Hackathon
-
-AGentic Resolve was built for the **[Agents for Humans Hackathon](https://agentsforhumans.devpost.com/)** — **Professional Agents** track.
-
-The core design challenge: *How do you make a single AI agent feel like an entire expert team?*
-The answer: **orchestrate multiple specialist agents and synthesize their outputs intelligently.**
-
----
-
-## 🔭 What's Next
-
-The roadmap for AGentic Resolve beyond the hackathon:
-
-- 🔗 **Real API integrations** — accounting/sales APIs (QuickBooks, Salesforce), calendar/email (Google Workspace, Microsoft 365), and ad-platform APIs (Google Ads, Meta)
-- ☁️ **Amazon Bedrock AgentCore** deployment for production-scale orchestration
-- 📊 **Visual Dashboard** — a real-time UI for the orchestrator's briefings
-- 🔔 **Proactive Alerts** — agents that surface critical insights without being asked
-- 🔐 **Role-based access** — different briefing depths for different stakeholders
-
----
-
-## 📄 License
-
-MIT — see [LICENSE](./LICENSE) for full details.
+MIT — see [LICENSE](./LICENSE).
 
 ---
 
 <div align="center">
 
-Built with ❤️ and ☕ using the [Strands Agents SDK](https://github.com/strands-agents/sdk-python) and Amazon Bedrock.
+Built with the [Strands Agents SDK](https://github.com/strands-agents/sdk-python) and Amazon Bedrock.
 
 *"One question. Three experts. One answer."*
 
