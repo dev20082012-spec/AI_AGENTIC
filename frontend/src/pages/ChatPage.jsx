@@ -110,6 +110,11 @@ export default function ChatPage() {
 
     setInputValue("");
 
+    // Snapshot history BEFORE adding the new user message — this is what the
+    // backend receives as prior context (the conversation so far, not including
+    // the message we're about to send, which the backend gets as `message`)
+    const historySnapshot = [...history];
+
     const userMsg = { role: "user", content: text };
     addMessage(specialist, userMsg);
 
@@ -121,7 +126,7 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          history: history,
+          history: historySnapshot,
         }),
       });
 

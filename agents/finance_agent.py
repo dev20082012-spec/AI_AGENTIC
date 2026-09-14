@@ -60,15 +60,19 @@ def run_finance_query(query: str, history: list = None) -> str:
     data_summary = _load_and_analyze()
     client = Groq(api_key=os.environ["GROQ_API_KEY"], max_retries=5)
 
+    # System message embeds data context once — NOT repeated in every user turn
     messages = [
         {
             "role": "system",
             "content": (
-                "Financial analyst. Provide concise metrics and key takeaways from the financial summary in 2-3 short bullets (under 75 words total)."
+                "You are a financial analyst. Use ONLY the data below to answer questions. "
+                "Be concise — 2-3 bullets, under 80 words. Do NOT discuss topics unrelated to finance.\n\n"
+                f"[Company Financial Data]\n{data_summary}"
             ),
         }
     ]
 
+    # Replay prior conversation turns (user + assistant messages only)
     if history:
         for msg in history:
             role = msg.get("role")
@@ -76,14 +80,14 @@ def run_finance_query(query: str, history: list = None) -> str:
             if role in ("user", "assistant") and content:
                 messages.append({"role": role, "content": content})
 
-    user_content = f"{query}\n\n[Financial Context]\n{data_summary}"
-    messages.append({"role": "user", "content": user_content})
+    # Current user question — clean, no data appended
+    messages.append({"role": "user", "content": query})
 
     resp = client.chat.completions.create(
         model="qwen/qwen3.8-27b",
         messages=messages,
         max_tokens=200,
-        temperature=0.2,
+        temperature=0.3,
     )
     return resp.choices[0].message.content.strip()
 
