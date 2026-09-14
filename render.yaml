@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: agentic-resolve
+    runtime: python
+    region: oregon
+    plan: free
+
+    # Build: install Python deps, build React frontend
+    buildCommand: |
+      pip install -r requirements.txt
+      cd frontend && npm install && npm run build && cd ..
+
+    # Start the FastAPI server — it serves both the API and the React SPA
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false            # Set this in the Render dashboard → Environment tab
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: NODE_VERSION
+        value: "20"
+
+    healthCheckPath: /api/health

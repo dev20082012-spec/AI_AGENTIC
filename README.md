@@ -1,103 +1,160 @@
-<<<<<<< HEAD
-<div align="center">
+# AGentic Resolve — Multi-Agent Executive AI
 
-# 🤖 AGentic Resolve
-
-### *Your AI-Powered Chief of Staff*
-
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![AWS Bedrock](https://img.shields.io/badge/Amazon_Bedrock-Claude_Sonnet_5-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)](https://aws.amazon.com/bedrock/)
-[![Strands SDK](https://img.shields.io/badge/Strands_Agents_SDK-Multi--Agent-6C3483?style=for-the-badge)](https://github.com/strands-agents/sdk-python)
-[![License: MIT](https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge)](./LICENSE)
-[![Hackathon](https://img.shields.io/badge/Hackathon-Agents_for_Humans-EC4899?style=for-the-badge)](https://agentsforhumans.devpost.com/)
-
-<br/>
-
-> **Ask one question. Get three expert answers. Instantly.**
->
-> AGentic Resolve is a multi-agent professional assistant that orchestrates specialized AI agents
-> in parallel, giving you a unified, decision-ready briefing across Finance, Operations,
-> and Marketing in seconds.
-
-</div>
-
----
-
-## What is AGentic Resolve?
-
-AGentic Resolve acts as the **intelligent command center** for your business.
-Powered by the [Strands Agents SDK](https://github.com/strands-agents/sdk-python)
-and running on **Amazon Bedrock (Claude Sonnet 5)**, it routes your business query through
-an orchestrator that dispatches three specialist sub-agents — all working in **parallel** —
-before synthesizing their insights into one crisp, actionable briefing.
-
-Built for the **[Agents for Humans Hackathon](https://agentsforhumans.devpost.com/)** —
-Professional Agents track.
-
----
-
-## Key Features
-
-| Feature | Description |
-|---|---|
-| Orchestrator Agent | Single entry point — understands your query and delegates intelligently |
-| Parallel Execution | All three specialists run and respond before synthesis |
-| Finance Agent | Revenue trend analysis, forecasting, historical sales insights |
-| Operations Agent | Scheduling automation, email drafting, employee update summaries |
-| Marketing Agent | Ad impact analysis, regional and demographic campaign performance |
-| Unified Briefing | All specialist outputs synthesized into one decision-ready response |
+A production-ready AI Chief of Staff application built with the **Strands Agents SDK**, **FastAPI**, and **React**. Three specialist agents (Finance, Operations, Marketing) run in parallel and synthesize enterprise intelligence into executive briefings.
 
 ---
 
 ## Architecture
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full Mermaid flowchart.
-
 ```
-User Query
-  --> Orchestrator Agent (Claude Sonnet 5 / Bedrock)
-        |--> finance_specialist   --> Revenue trends, forecasts, anomalies
-        |--> ops_specialist       --> Team status, blockers, email drafts
-        `--> marketing_specialist --> Campaign analysis, segment rankings
-                    |
-                    `--> Synthesized Executive Briefing --> User
+┌─────────────────────────────────────────┐
+│           Single FastAPI Process         │
+│   (serves API + built React frontend)    │
+│                                         │
+│  POST /api/chat/{specialist}  ──►  Groq │
+│  POST /api/briefing            ──►  Orchestrator │
+│  GET  /                       ──►  React SPA     │
+└─────────────────────────────────────────┘
+```
+
+**Stack:**
+- **Backend**: FastAPI + Strands Agents SDK + Groq (qwen/qwen3.8-27b)
+- **Frontend**: React 19 + React Router + Tailwind CSS
+- **Data**: Pre-aggregated pandas/numpy analytics from local CSV/JSON fixtures
+- **Deployment**: Single process — FastAPI serves both the API and the built React app
+
+---
+
+## 🚀 Quick Start (Local Dev)
+
+### 1. Clone & Set Up Environment
+
+```bash
+git clone <your-repo-url>
+cd AI_AGENTIC
+
+# Create a .env file with your Groq API key
+cp .env.example .env
+# Edit .env and set: GROQ_API_KEY=your_key_here
+```
+
+Get a free Groq key at: https://console.groq.com → API Keys
+
+### 2. Install Python Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Install & Run Frontend (Dev Mode)
+
+```bash
+cd frontend
+npm install
+npm run dev       # Frontend dev server on http://localhost:5173
+cd ..
+```
+
+### 4. Run the Backend
+
+```bash
+uvicorn api.main:app --reload --port 8000
+```
+
+- **Frontend (dev)**: http://localhost:5173
+- **API docs**: http://localhost:8000/api/docs
+
+---
+
+## 🌐 Production Deployment
+
+In production, FastAPI **serves both the API and the built React frontend** from a single process on a single port. No Vite dev server is needed.
+
+### Deploy to Render.com (Free Tier — Recommended)
+
+1. Push this repo to GitHub.
+2. Go to [render.com](https://render.com) → **New Web Service** → Connect your repo.
+3. Render detects `render.yaml` automatically.
+4. In the Render dashboard → **Environment** tab, add:
+   ```
+   GROQ_API_KEY = your_groq_api_key_here
+   ```
+5. Click **Deploy**. Render will:
+   - Install Python deps (`pip install -r requirements.txt`)
+   - Build the React frontend (`cd frontend && npm install && npm run build`)
+   - Start FastAPI (`uvicorn api.main:app --host 0.0.0.0 --port $PORT`)
+6. Your app is live at `https://your-app.onrender.com`.
+
+### Deploy to Railway.app
+
+1. Push to GitHub.
+2. Go to [railway.app](https://railway.app) → **New Project** → Deploy from GitHub repo.
+3. Add environment variable: `GROQ_API_KEY = your_key_here`
+4. Add a start command in the service settings:
+   ```
+   pip install -r requirements.txt && cd frontend && npm install && npm run build && cd .. && uvicorn api.main:app --host 0.0.0.0 --port $PORT
+   ```
+5. Deploy — your app is live at `https://your-app.up.railway.app`.
+
+### Deploy to Any VPS / Cloud (AWS EC2, DigitalOcean, Fly.io)
+
+```bash
+# On the server:
+git clone <your-repo>
+cd AI_AGENTIC
+
+# Set environment variable
+export GROQ_API_KEY=your_key_here
+
+# Install Python deps
+pip install -r requirements.txt
+
+# Build frontend + start server (one command)
+bash startup.sh
+```
+
+Or with a process manager (recommended for production):
+```bash
+pip install gunicorn
+gunicorn api.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
 ---
 
-## Specialist Agents
+## Environment Variables
 
-### Finance Agent — agents/finance_agent.py
-
-- Revenue trend analysis across product lines (month-over-month)
-- Sales forecasting via linear regression on trailing 6 months
-- Anomaly detection: flags spikes/drops beyond 2-sigma threshold
-- Powered by data/sales_sample.csv
-
-### Operations Agent — agents/ops_agent.py
-
-- Team task status summary grouped by: done / in_progress / pending / blocked
-- Flags blocked or stale items (no update in 10+ days) as HIGH PRIORITY
-- Professional email draft generator for scheduling requests
-- Powered by data/employee_updates.json
-
-### Marketing Agent — agents/marketing_agent.py
-
-- CTR and conversion rate by region and age group, ranked best to worst
-- Direct recommendation: which segment to increase investment in, and which to cut
-- Powered by data/campaign_sample.csv
+| Variable | Required | Description |
+|---|---|---|
+| `GROQ_API_KEY` | ✅ Yes | Groq Cloud API key (free at console.groq.com) |
+| `ALLOWED_ORIGINS` | No | Comma-separated CORS origins (default: localhost only) |
+| `PORT` | No | Port to listen on (default: 8000, set automatically by hosting platforms) |
 
 ---
 
-## Tech Stack
+## API Reference
 
-| Technology | Role |
-|---|---|
-| Python 3.10+ | Core runtime |
-| [Strands Agents SDK](https://github.com/strands-agents/sdk-python) | Multi-agent framework (agents-as-tools) |
-| Amazon Bedrock | Managed model provider |
-| Claude Sonnet 5 | LLM powering all agents |
-| pandas / numpy | Data processing inside tool functions |
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/health` | GET | Health check |
+| `/api/chat/{specialist}` | POST | Multi-turn chat with finance / ops / marketing |
+| `/api/briefing` | POST | Full orchestrator briefing across all 3 specialists |
+| `/api/docs` | GET | Interactive Swagger UI |
+
+### Chat Request Example
+
+```bash
+curl -X POST https://your-app.com/api/chat/finance \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What is our revenue trend?", "history": []}'
+```
+
+### Briefing Request Example
+
+```bash
+curl -X POST https://your-app.com/api/briefing \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Give me this weeks executive briefing"}'
+```
 
 ---
 
@@ -105,116 +162,42 @@ User Query
 
 ```
 AI_AGENTIC/
-|-- agents/
-|   |-- finance_agent.py      # Revenue trend analysis and forecasting
-|   |-- ops_agent.py          # Scheduling, email drafts, employee updates
-|   `-- marketing_agent.py    # Ad impact and market research
-|-- data/
-|   |-- sales_sample.csv          # Synthetic sales and revenue data
-|   |-- employee_updates.json     # Synthetic employee work updates
-|   `-- campaign_sample.csv       # Synthetic advertising campaign data
-|-- orchestrator.py           # Top-level agent, agents-as-tools pattern
-|-- model.py                  # Shared Amazon Bedrock model configuration
-|-- requirements.txt          # Python dependencies
-|-- ARCHITECTURE.md           # Full Mermaid architecture diagram
-|-- README.md
-`-- LICENSE                   # MIT
+├── api/
+│   └── main.py              # FastAPI app (serves API + React SPA)
+├── agents/
+│   ├── finance_agent.py     # Revenue analytics agent
+│   ├── ops_agent.py         # Operations management agent
+│   └── marketing_agent.py   # Campaign analytics agent
+├── data/
+│   ├── sales_sample.csv     # Finance data
+│   ├── employee_updates.json # Ops data
+│   └── campaign_sample.csv  # Marketing data
+├── frontend/
+│   ├── src/
+│   │   ├── config.js        # API base URL (relative in prod, localhost in dev)
+│   │   ├── context/
+│   │   │   └── ChatContext.jsx  # localStorage-persisted conversation history
+│   │   └── pages/
+│   │       ├── LandingPage.jsx  # 4-card Executive Hub
+│   │       ├── ChatPage.jsx     # Per-specialist multi-turn chat
+│   │       └── BriefingPage.jsx # Full orchestrator briefing
+│   └── dist/                # Built by `npm run build` — served by FastAPI
+├── model.py                 # LLM config (Groq / AWS Bedrock)
+├── orchestrator.py          # Chief of Staff orchestrator agent
+├── requirements.txt         # Python dependencies
+├── render.yaml              # Render.com deployment config
+├── railway.toml             # Railway.app deployment config
+├── Procfile                 # Heroku/generic Procfile
+├── startup.sh               # Universal startup script
+└── .env.example             # Environment variable template
 ```
-
-> **Note on /data:** All datasets are synthetic sample data standing in for real integrations
-> (accounting/sales APIs, calendar APIs, ad-platform APIs). They are designed to produce
-> realistic, meaningful analysis outputs during the demo.
 
 ---
 
-## Setup
+## Built With
 
-### 1. Clone and create a virtual environment
-
-```bash
-git clone <your-repo-url>
-cd AI_AGENTIC
-
-python -m venv .venv
-
-# Linux / macOS
-source .venv/bin/activate
-
-# Windows
-.venv\Scripts\activate
-```
-
-### 2. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configure AWS credentials
-
-You need AWS credentials with Amazon Bedrock access enabled for Claude Sonnet 5
-(`us.anthropic.claude-sonnet-4-5-20251001-v1:0`) in region `us-west-2`.
-
-```bash
-# Option A: AWS CLI
-aws configure
-
-# Option B: Environment variables
-export AWS_ACCESS_KEY_ID=your_key
-export AWS_SECRET_ACCESS_KEY=your_secret
-export AWS_DEFAULT_REGION=us-west-2
-```
-
-The model ID and region are defined as constants at the top of model.py and can be
-changed in 5 seconds if your Bedrock access is in a different region.
-
-### 4. Run CLI Orchestrator
-
-```bash
-python orchestrator.py
-```
-
-This fires the sample briefing query through all three specialist agents and prints
-a synthesized executive briefing. Delegation routing is printed to the console in
-real time so you can see which specialist(s) were called.
-
----
-
-## 🖥️ Running the Full App (React + FastAPI)
-
-You can launch the complete executive dashboard interface with the FastAPI backend wrapper and React frontend:
-
-| Service | Command | URL |
-|---|---|---|
-| **Backend (FastAPI)** | `uvicorn api.main:app --reload --port 8000` | http://localhost:8000/api/health |
-| **Frontend (Vite + React)** | `cd frontend && npm install && npm run dev` | http://localhost:5173 |
-
-```bash
-# Terminal 1: Launch FastAPI Server
-uvicorn api.main:app --reload --port 8000
-
-# Terminal 2: Launch React Frontend
-cd frontend
-npm install
-npm run dev
-```
-
-
----
-
-## License
-
-MIT — see [LICENSE](./LICENSE).
-
----
-
-<div align="center">
-
-Built with the [Strands Agents SDK](https://github.com/strands-agents/sdk-python) and Amazon Bedrock.
-
-*"One question. Three experts. One answer."*
-
-</div>
-=======
-
->>>>>>> 08a488c8beab4356ca55b0f991df7dff92d130a8
+- [Strands Agents SDK](https://github.com/strands-agents/sdk-python) — Multi-agent orchestration framework
+- [Groq](https://console.groq.com) — Ultra-fast LLM inference
+- [FastAPI](https://fastapi.tiangolo.com) — Production Python API server
+- [React 19](https://react.dev) + [React Router](https://reactrouter.com) — Frontend SPA
+- [Tailwind CSS](https://tailwindcss.com) — Utility-first styling

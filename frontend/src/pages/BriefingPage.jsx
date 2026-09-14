@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
+import { API_BASE } from "../config";
 import {
   ArrowLeft,
   Sparkles,
@@ -16,7 +17,6 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const PRESET_QUERIES = [
   "Give me this week's briefing: revenue trend, pending ops items, and how our last campaign performed.",

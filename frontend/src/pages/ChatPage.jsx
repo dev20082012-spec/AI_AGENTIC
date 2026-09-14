@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { useChat } from "../context/ChatContext";
+import { API_BASE } from "../config";
 import {
   ArrowLeft,
   Send,
@@ -18,7 +19,7 @@ import {
   Check,
 } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 
 const SPECIALIST_META = {
   finance: {

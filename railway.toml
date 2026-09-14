@@ -1,0 +1,14 @@
+[build]
+builder = "nixpacks"
+
+[build.env]
+PYTHON_VERSION = "3.11"
+NODE_VERSION = "20"
+
+[deploy]
+startCommand = "uvicorn api.main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/api/health"
+restartPolicyType = "on_failure"
+
+[[services]]
+name = "agentic-resolve"
