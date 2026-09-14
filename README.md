@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <div align="center">
 
 # 🤖 AGentic Resolve
@@ -192,3 +193,6 @@ Built with the [Strands Agents SDK](https://github.com/strands-agents/sdk-python
 *"One question. Three experts. One answer."*
 
 </div>
+=======
+
+>>>>>>> 08a488c8beab4356ca55b0f991df7dff92d130a8
