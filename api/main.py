@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -79,11 +79,13 @@ class ChatResponse(BaseModel):
 
 # ── API routes ────────────────────────────────────────────────────────────────
 @app.get("/api/health")
+@app.get("/health")
 def health_check():
     return {"status": "ok", "version": "1.0.0"}
 
 
 @app.post("/api/briefing", response_model=BriefingResponse)
+@app.post("/briefing", response_model=BriefingResponse)
 def get_briefing(request: BriefingRequest):
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
@@ -98,6 +100,7 @@ def get_briefing(request: BriefingRequest):
 
 
 @app.post("/api/chat/{specialist}", response_model=ChatResponse)
+@app.post("/chat/{specialist}", response_model=ChatResponse)
 def chat_specialist(specialist: str, request: ChatRequest):
     spec = specialist.lower().strip()
     if spec not in ("finance", "ops", "marketing"):
@@ -124,25 +127,54 @@ def chat_specialist(specialist: str, request: ChatRequest):
         )
 
 
-# ── Static file serving (production SPA) ─────────────────────────────────────
-# Mount the built React app. FastAPI serves /assets/* etc. directly.
-# Any unknown route falls through to index.html for React Router.
+# ── Static file & SPA serving ────────────────────────────────────────────────
 _FRONTEND_DIST = Path(_PROJECT_ROOT) / "frontend" / "dist"
+_ASSETS_DIR = _FRONTEND_DIST / "assets"
 
-if _FRONTEND_DIST.exists():
-    # Serve static assets (JS, CSS, images)
+if _ASSETS_DIR.exists():
     app.mount(
         "/assets",
-        StaticFiles(directory=str(_FRONTEND_DIST / "assets")),
+        StaticFiles(directory=str(_ASSETS_DIR)),
         name="assets",
     )
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str, request: Request):
-        """Serve the React SPA for any non-API route."""
-        # Try to serve an exact file first (favicon.ico, robots.txt, etc.)
-        requested = _FRONTEND_DIST / full_path
-        if requested.is_file():
-            return FileResponse(str(requested))
-        # Fall back to index.html so React Router can handle the route client-side
-        return FileResponse(str(_FRONTEND_DIST / "index.html"))
+
+@app.get("/", include_in_schema=False)
+async def serve_root():
+    index_file = _FRONTEND_DIST / "index.html"
+    if index_file.is_file():
+        return FileResponse(str(index_file))
+    return HTMLResponse(
+        "<!DOCTYPE html><html><head><title>AGentic Resolve</title></head>"
+        "<body style='font-family:sans-serif;padding:2rem;background:#0f172a;color:#f8fafc;'>"
+        "<h2>Frontend build not found</h2>"
+        "<p>React frontend index.html not found. Run <code>npm run build</code> in the frontend directory.</p>"
+        "</body></html>"
+    )
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa(full_path: str, request: Request):
+    """Serve the React SPA for any non-API route."""
+    clean_path = full_path.strip("/")
+    # Never intercept API routes
+    if clean_path.startswith("api") or clean_path in ("health", "docs", "redoc", "openapi.json"):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    # Try exact static file in frontend/dist (e.g. vite.svg, favicon.ico, etc.)
+    requested = _FRONTEND_DIST / clean_path
+    if requested.is_file():
+        return FileResponse(str(requested))
+
+    # Fall back to index.html so React Router handles the route client-side (/briefing, /chat/..., etc.)
+    index_file = _FRONTEND_DIST / "index.html"
+    if index_file.is_file():
+        return FileResponse(str(index_file))
+
+    return HTMLResponse(
+        "<!DOCTYPE html><html><head><title>AGentic Resolve</title></head>"
+        "<body style='font-family:sans-serif;padding:2rem;background:#0f172a;color:#f8fafc;'>"
+        "<h2>Page Not Found</h2>"
+        "<p>React frontend index.html not found. Run <code>npm run build</code> in the frontend directory.</p>"
+        "</body></html>"
+    )

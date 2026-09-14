@@ -30,11 +30,8 @@ _load_env()
 def _check_env(var: str, hint: str):
     val = os.environ.get(var)
     if not val:
-        raise SystemExit(
-            f"\n[ERROR] Missing environment variable: {var}\n\n"
-            f"  {hint}\n\n"
-            f"  PowerShell:  $env:{var}='your_key_here'\n"
-            f"  CMD:         set {var}=your_key_here\n"
+        raise RuntimeError(
+            f"Missing environment variable: {var}. {hint}"
         )
     return val
 
