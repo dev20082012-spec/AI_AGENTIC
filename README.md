@@ -168,7 +168,7 @@ export AWS_DEFAULT_REGION=us-west-2
 The model ID and region are defined as constants at the top of model.py and can be
 changed in 5 seconds if your Bedrock access is in a different region.
 
-### 4. Run
+### 4. Run CLI Orchestrator
 
 ```bash
 python orchestrator.py
@@ -177,6 +177,28 @@ python orchestrator.py
 This fires the sample briefing query through all three specialist agents and prints
 a synthesized executive briefing. Delegation routing is printed to the console in
 real time so you can see which specialist(s) were called.
+
+---
+
+## 🖥️ Running the Full App (React + FastAPI)
+
+You can launch the complete executive dashboard interface with the FastAPI backend wrapper and React frontend:
+
+| Service | Command | URL |
+|---|---|---|
+| **Backend (FastAPI)** | `uvicorn api.main:app --reload --port 8000` | http://localhost:8000/api/health |
+| **Frontend (Vite + React)** | `cd frontend && npm install && npm run dev` | http://localhost:5173 |
+
+```bash
+# Terminal 1: Launch FastAPI Server
+uvicorn api.main:app --reload --port 8000
+
+# Terminal 2: Launch React Frontend
+cd frontend
+npm install
+npm run dev
+```
+
 
 ---
 

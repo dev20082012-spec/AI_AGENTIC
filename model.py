@@ -7,7 +7,7 @@ BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20251001-v1:0"
 BEDROCK_REGION = "us-west-2"
 
 litellm.num_retries = 6
-litellm.retry_after = 20
+litellm.retry_after = 3
 litellm.drop_params = True
 
 def _load_env_file():

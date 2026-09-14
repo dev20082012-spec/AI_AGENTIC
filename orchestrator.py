@@ -36,17 +36,33 @@ from agents.ops_agent import run_ops_query
 from agents.marketing_agent import run_marketing_query
 
 _call_count = {"n": 0}
+_last_run_details = {
+    "specialists_called": [],
+    "specialist_results": {
+        "finance": {"called": False, "summary": ""},
+        "ops": {"called": False, "summary": ""},
+        "marketing": {"called": False, "summary": ""},
+    },
+}
 
 
 def _timed_specialist(name: str, fn, query: str) -> str:
     _call_count["n"] += 1
     if _call_count["n"] > 1:
-        wait = 30
-        print(f"  [..] Pausing {wait}s to stay within API rate limits...")
+        wait = 3
+        print(f"  [..] Rate limit cooldown ({wait}s)...")
         time.sleep(wait)
     print(f"\n  [>>] [Orchestrator] -> {name} specialist")
     result = fn(query)
     print(f"  [OK] [Orchestrator] <- {name} specialist responded")
+
+    key = name.lower()
+    if key not in _last_run_details["specialists_called"]:
+        _last_run_details["specialists_called"].append(key)
+    _last_run_details["specialist_results"][key] = {
+        "called": True,
+        "summary": result,
+    }
     return result
 
 
@@ -88,6 +104,13 @@ SAMPLE_QUERY = (
 
 def run_briefing(query: str) -> str:
     _call_count["n"] = 0
+    _last_run_details["specialists_called"] = []
+    _last_run_details["specialist_results"] = {
+        "finance": {"called": False, "summary": ""},
+        "ops": {"called": False, "summary": ""},
+        "marketing": {"called": False, "summary": ""},
+    }
+
     print(f"\n{'='*70}")
     print("AGentic Resolve -- Business Briefing")
     print(f"{'='*70}")
@@ -103,6 +126,16 @@ def run_briefing(query: str) -> str:
     print(response)
     print(f"{'='*70}\n")
     return response
+
+
+def run_briefing_structured(query: str) -> dict:
+    response = run_briefing(query)
+    return {
+        "query": query,
+        "specialists_called": list(_last_run_details["specialists_called"]),
+        "specialist_results": dict(_last_run_details["specialist_results"]),
+        "synthesized_briefing": response,
+    }
 
 
 if __name__ == "__main__":

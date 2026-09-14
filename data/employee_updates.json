@@ -3,70 +3,70 @@
     "employee_name": "Sarah Chen",
     "task": "Q4 budget reconciliation",
     "status": "done",
-    "last_update_date": "2024-12-10",
+    "last_update_date": "2026-09-10",
     "notes": "Completed and submitted to finance. All variances under 2%."
   },
   {
     "employee_name": "Marcus Williams",
-    "task": "New client onboarding — Vertex Corp",
+    "task": "New client onboarding \u2014 Vertex Corp",
     "status": "in_progress",
-    "last_update_date": "2024-12-12",
+    "last_update_date": "2026-09-12",
     "notes": "Contract signed. Kickoff scheduled for Dec 18. Awaiting IT provisioning."
   },
   {
     "employee_name": "Priya Patel",
     "task": "Product roadmap presentation for board",
     "status": "blocked",
-    "last_update_date": "2024-11-28",
+    "last_update_date": "2026-08-31",
     "notes": "Blocked: waiting on CTO sign-off for Q1 priorities. No response in 14 days."
   },
   {
     "employee_name": "James O'Brien",
     "task": "Migrate legacy CRM to Salesforce",
     "status": "in_progress",
-    "last_update_date": "2024-12-11",
+    "last_update_date": "2026-09-11",
     "notes": "Phase 1 (data export) complete. Phase 2 (import + validation) starts Mon."
   },
   {
     "employee_name": "Aisha Kamara",
     "task": "Hire two senior engineers",
     "status": "in_progress",
-    "last_update_date": "2024-12-13",
+    "last_update_date": "2026-09-13",
     "notes": "8 final-round interviews this week. Offers expected by Dec 20."
   },
   {
     "employee_name": "Tom Nguyen",
     "task": "Resolve production outage post-mortem report",
     "status": "blocked",
-    "last_update_date": "2024-11-30",
+    "last_update_date": "2026-08-30",
     "notes": "Blocked: need AWS support ticket resolved first. Ticket #8821 open 15 days."
   },
   {
     "employee_name": "Elena Rossi",
     "task": "Launch partner API v2 documentation",
     "status": "done",
-    "last_update_date": "2024-12-09",
+    "last_update_date": "2026-09-09",
     "notes": "Published to dev portal. Partner team confirmed receipt."
   },
   {
     "employee_name": "David Park",
-    "task": "Quarterly performance reviews — engineering team",
+    "task": "Quarterly performance reviews \u2014 engineering team",
     "status": "pending",
-    "last_update_date": "2024-12-01",
+    "last_update_date": "2026-09-07",
     "notes": "Scheduled to start Dec 16. Manager templates sent out."
   },
   {
     "employee_name": "Lena Kovacs",
     "task": "GDPR compliance audit for EU expansion",
     "status": "in_progress",
-    "last_update_date": "2024-12-12",
+    "last_update_date": "2026-09-08",
     "notes": "External auditor engaged. Data mapping 60% complete. Target: Jan 10."
   },
   {
     "employee_name": "Raj Mehta",
-    "task": "Renegotiate vendor contract — DataStream Inc",
+    "task": "Renegotiate vendor contract \u2014 DataStream Inc",
     "status": "pending",
-    "last_update_date": "2024-12-03",
+    "last_update_date": "2026-09-06",
     "notes": "Initial proposal sent. Follow-up call TBD. Contract expires Jan 31."
   }
 ]

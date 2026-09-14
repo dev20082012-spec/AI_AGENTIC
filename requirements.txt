@@ -5,3 +5,6 @@ litellm
 boto3
 pandas
 numpy
+fastapi
+uvicorn
+pydantic
