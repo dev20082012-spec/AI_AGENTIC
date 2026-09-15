@@ -117,6 +117,7 @@ def run_finance_query_structured(query: str, history: list = None) -> dict:
 
     return {
         "specialist": "finance",
+        "status": "ok",
         "answer": answer,
         "findings": findings,
         "metrics": data.get("products", {}),

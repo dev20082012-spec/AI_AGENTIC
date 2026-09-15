@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from model import chat_completion
+from model import chat_completion, stream_chat_completion
 from agents.finance_agent import run_finance_query_structured
 from agents.ops_agent import run_ops_query_structured
 from agents.marketing_agent import run_marketing_query_structured
@@ -416,3 +416,48 @@ def run_executive_turn(message: str, history: list[dict] = None) -> dict:
             "model": synth_meta.get("model", ""),
         },
     }
+
+
+def stream_executive_turn(message: str, history: list[dict] = None):
+    """
+    Streaming generator for Executive Chief of Staff yielding SSE data events:
+    - event: status ({'step': '...', 'text': '...'})
+    - event: specialist ({'specialists': [...]})
+    - event: token ({'delta': '...'})
+    - event: done ({'specialists_used': [...], 'metadata': {...}})
+    """
+    history = history or []
+    specialists_used = []
+
+    # 1. Fast check for greetings / ambiguity
+    fast_check = _detect_greeting_or_ambiguity(message, history)
+    if fast_check:
+        yield f"data: {json.dumps({'event': 'status', 'step': 'ready', 'text': 'Executive AI ready'})}\n\n"
+        # Stream response text
+        words = fast_check['response'].split(" ")
+        for i, w in enumerate(words):
+            yield f"data: {json.dumps({'event': 'token', 'delta': w + (' ' if i < len(words) - 1 else '')})}\n\n"
+        yield f"data: {json.dumps({'event': 'done', 'specialists_used': [], 'metadata': {'intent': fast_check['intent'], 'provider': 'direct', 'model': 'rule-based'}})}\n\n"
+        return
+
+    # 2. Status: Analyzing & Routing
+    yield f"data: {json.dumps({'event': 'status', 'step': 'routing', 'text': 'Analyzing intent & routing specialists...'})}\n\n"
+
+    # Get non-streaming turn result to ensure reliable routing & specialist execution
+    turn_result = run_executive_turn(message, history)
+    specialists_used = turn_result.get("specialists_used", [])
+
+    if specialists_used:
+        yield f"data: {json.dumps({'event': 'specialist', 'specialists': specialists_used})}\n\n"
+        for s in specialists_used:
+            yield f"data: {json.dumps({'event': 'status', 'step': 'consulted', 'text': f'Synthesized findings from {s.capitalize()} Specialist'})}\n\n"
+
+    yield f"data: {json.dumps({'event': 'status', 'step': 'streaming', 'text': 'Streaming executive response...'})}\n\n"
+
+    full_resp = turn_result.get("response", "")
+    words = full_resp.split(" ")
+    for i, w in enumerate(words):
+        yield f"data: {json.dumps({'event': 'token', 'delta': w + (' ' if i < len(words) - 1 else '')})}\n\n"
+
+    yield f"data: {json.dumps({'event': 'done', 'specialists_used': specialists_used, 'metadata': turn_result.get('metadata', {})})}\n\n"
+

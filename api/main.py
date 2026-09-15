@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -50,14 +50,25 @@ class BriefingRequest(BaseModel):
 
 class SpecialistDetail(BaseModel):
     called: bool
-    summary: str
+    status: str = "consulted"
+    summary: str = ""
+    error: str | None = None
+    findings: list[str] = Field(default_factory=list)
+    metrics: dict = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
 
 
 class BriefingResponse(BaseModel):
     query: str
-    specialists_called: list[str]
+    generated_at: str | None = None
+    specialists_called: list[str] = Field(default_factory=list)
     specialist_results: dict[str, SpecialistDetail]
+    key_risks: list[str] = Field(default_factory=list)
+    key_opportunities: list[str] = Field(default_factory=list)
+    top_actions: list[str] = Field(default_factory=list)
     synthesized_briefing: str
+    metadata: dict = Field(default_factory=dict)
 
 
 class ChatMessage(BaseModel):
@@ -95,14 +106,36 @@ def health_check():
 def get_briefing(request: BriefingRequest):
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
+    if len(request.query) > 2500:
+        raise HTTPException(status_code=400, detail="Query exceeds maximum length of 2500 characters.")
     try:
         data = run_briefing_structured(request.query)
         return data
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Agent orchestration failed: {str(e)}",
+            detail=f"Executive Briefing failed: {str(e)}",
         )
+
+
+@app.post("/api/chat/executive/stream")
+@app.post("/chat/executive/stream")
+def chat_executive_stream(request: ChatRequest):
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
+    if len(request.message) > 2500:
+        raise HTTPException(status_code=400, detail="Message exceeds maximum length of 2500 characters.")
+    from executive_agent import stream_executive_turn
+    history_dicts = [{"role": m.role, "content": m.content} for m in request.history]
+    return StreamingResponse(
+        stream_executive_turn(request.message, history=history_dicts),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/chat/executive", response_model=ExecutiveChatResponse)
@@ -110,6 +143,8 @@ def get_briefing(request: BriefingRequest):
 def chat_executive(request: ChatRequest):
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
+    if len(request.message) > 2500:
+        raise HTTPException(status_code=400, detail="Message exceeds maximum length of 2500 characters.")
     from executive_agent import run_executive_turn
     history_dicts = [{"role": m.role, "content": m.content} for m in request.history]
     try:

@@ -110,6 +110,7 @@ def run_marketing_query_structured(query: str, history: list = None) -> dict:
 
     return {
         "specialist": "marketing",
+        "status": "ok",
         "answer": answer,
         "findings": findings,
         "metrics": totals,

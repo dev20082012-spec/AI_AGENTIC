@@ -1,6 +1,7 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useChat } from "../context/ChatContext";
+import { API_BASE } from "../config";
 import {
   TrendingUp,
   CalendarClock,
@@ -11,12 +12,15 @@ import {
   MessageSquare,
   Cpu,
   ChevronRight,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 const SPECIALISTS = [
   {
     id: "finance",
-    name: "Finance Agent",
+    name: "Finance Specialist",
     icon: TrendingUp,
     color: "from-teal-500/20 to-teal-600/10 border-teal-500/30 text-teal-400 hover:border-teal-400/60",
     badgeColor: "bg-teal-500/15 text-teal-300 border-teal-500/30",
@@ -26,7 +30,7 @@ const SPECIALISTS = [
   },
   {
     id: "ops",
-    name: "Operations Agent",
+    name: "Operations Specialist",
     icon: CalendarClock,
     color: "from-cyan-500/20 to-cyan-600/10 border-cyan-500/30 text-cyan-400 hover:border-cyan-400/60",
     badgeColor: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
@@ -36,7 +40,7 @@ const SPECIALISTS = [
   },
   {
     id: "marketing",
-    name: "Marketing Agent",
+    name: "Marketing Specialist",
     icon: Megaphone,
     color: "from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-400 hover:border-emerald-400/60",
     badgeColor: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
@@ -46,8 +50,23 @@ const SPECIALISTS = [
   },
 ];
 
+const SUGGESTED_EXECUTIVE_PROMPTS = [
+  "How are sales performing across our products?",
+  "Which operational tasks are currently blocked or stale?",
+  "What should I focus on this week across all departments?",
+  "Could operational bottlenecks explain any revenue movement?",
+];
+
 export default function LandingPage() {
   const { conversations } = useChat();
+  const navigate = useNavigate();
+  const [systemOnline, setSystemOnline] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/health`)
+      .then((res) => res.ok ? setSystemOnline(true) : setSystemOnline(false))
+      .catch(() => setSystemOnline(false));
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#080c14] text-slate-100 flex flex-col font-sans">
@@ -67,18 +86,18 @@ export default function LandingPage() {
                   Chief of Staff
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Autonomous Multi-Agent Enterprise Orchestration</p>
+              <p className="text-xs text-slate-400">Autonomous Multi-Agent Enterprise Intelligence</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 text-xs">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
               <Cpu className="w-3.5 h-3.5 text-teal-400" />
-              <span>Strands Agents SDK</span>
+              <span>Strands Agents &middot; Groq/OpenRouter</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-              <span>Multi-Agent Network Active</span>
+              <div className={`w-2 h-2 rounded-full ${systemOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}></div>
+              <span>{systemOnline ? "Multi-Agent Network Active" : "Connecting..."}</span>
             </div>
           </div>
         </div>
@@ -86,34 +105,38 @@ export default function LandingPage() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10 flex flex-col justify-center">
-        {/* Title */}
-        <div className="text-center max-w-3xl mx-auto mb-10">
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-3">
-            Select an Executive Specialist
+        {/* Flagship Hero Header */}
+        <div className="text-center max-w-3xl mx-auto mb-10 space-y-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Interactive Multi-Agent Chief of Staff</span>
+          </div>
+          <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white leading-tight">
+            Ask your business. <br className="hidden sm:inline" />
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 via-teal-200 to-cyan-300">
+              AGentic Resolve coordinates the answer.
+            </span>
           </h1>
-          <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-            Engage in persistent multi-turn conversations with domain specialists, or execute a comprehensive full-business executive briefing with the top-level orchestrator.
+          <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-2xl mx-auto">
+            A conversational AI Chief of Staff that routes questions to Finance, Operations, and Marketing specialists and turns their findings into decision-ready insights.
           </p>
         </div>
 
         {/* Flagship Conversational Chief of Staff Spotlight Card */}
         <div className="mb-8">
-          <Link
-            to="/chat/executive"
-            className="group relative block rounded-2xl bg-gradient-to-r from-indigo-950/70 via-slate-900/90 to-teal-950/50 border border-indigo-500/40 hover:border-indigo-400/70 p-6 md:p-8 transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-indigo-500/15 shadow-xl"
-          >
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="rounded-2xl bg-gradient-to-r from-indigo-950/70 via-slate-900/90 to-teal-950/50 border border-indigo-500/40 p-6 md:p-8 shadow-2xl">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-slate-800/80">
               <div className="flex items-start gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-teal-400 to-cyan-500 flex items-center justify-center text-slate-950 shrink-0 shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-teal-400 to-cyan-500 flex items-center justify-center text-slate-950 shrink-0 shadow-lg shadow-indigo-500/20">
                   <Sparkles className="w-7 h-7" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <h2 className="text-xl md:text-2xl font-black text-white group-hover:text-indigo-200 transition-colors">
+                    <h2 className="text-xl md:text-2xl font-black text-white">
                       Chief of Staff — Interactive Executive AI
                     </h2>
                     <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                      Flagship Coordinator
+                      Flagship Workflow
                     </span>
                     {(conversations.executive || []).length > 0 ? (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800/80 text-teal-300 border border-teal-500/30">
@@ -121,7 +144,7 @@ export default function LandingPage() {
                       </span>
                     ) : (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-400 border border-slate-700">
-                        Ready to Chat
+                        Ready to Consult
                       </span>
                     )}
                   </div>
@@ -131,14 +154,42 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
-                <div className="text-xs font-semibold px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-teal-500 hover:from-indigo-400 hover:to-teal-400 text-slate-950 font-bold flex items-center gap-2 transition-all shadow-md shadow-indigo-500/25">
-                  <span>Open Executive Chat</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
+              <Link
+                to="/chat/executive"
+                className="shrink-0 text-xs font-bold px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-teal-500 hover:from-indigo-400 hover:to-teal-400 text-slate-950 flex items-center gap-2 transition-all shadow-md shadow-indigo-500/25"
+              >
+                <span>Launch Executive Chat</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            {/* Suggested Prompts Quick Chips */}
+            <div className="pt-4">
+              <span className="text-[11px] uppercase font-bold tracking-wider text-slate-400 block mb-2">
+                Suggested Inquiries:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {SUGGESTED_EXECUTIVE_PROMPTS.map((prompt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => navigate("/chat/executive")}
+                    className="text-xs text-slate-300 hover:text-white px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 hover:border-indigo-500/50 transition-all flex items-center gap-1.5"
+                  >
+                    <span>{prompt}</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
+                  </button>
+                ))}
               </div>
             </div>
-          </Link>
+          </div>
+        </div>
+
+        {/* Section Heading for Secondary Workflows */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm uppercase font-bold tracking-wider text-slate-400">
+            Specialist Domains & Executive Briefing
+          </h3>
+          <span className="text-xs text-slate-500">Grounded Deterministic Analytics</span>
         </div>
 
         {/* 4 Cards Grid */}
@@ -204,7 +255,7 @@ export default function LandingPage() {
                   )}
 
                   <div className="flex items-center justify-between mt-4 text-xs font-semibold text-slate-200 group-hover:text-white">
-                    <span>Open Chat</span>
+                    <span>Consult Specialist</span>
                     <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
@@ -223,7 +274,7 @@ export default function LandingPage() {
                   <Sparkles className="w-6 h-6" />
                 </div>
                 <span className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-amber-500/15 text-amber-300 border-amber-500/30">
-                  Orchestrator
+                  Full Briefing
                 </span>
               </div>
 
@@ -231,7 +282,7 @@ export default function LandingPage() {
                 Full Business Briefing
               </h2>
               <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                Executes the top-level orchestrator agent across Finance, Ops, and Marketing simultaneously.
+                Executes cross-department synthesis across Finance, Ops, and Marketing with fault-tolerant status tracking.
               </p>
             </div>
 
@@ -240,11 +291,11 @@ export default function LandingPage() {
                 Executive View
               </span>
               <p className="text-xs text-slate-400 line-clamp-2">
-                Unified cross-domain intelligence with synthesized 3 Key Actions.
+                Unified cross-domain intelligence with Key Risks, Opportunities, and 3 Actions.
               </p>
 
               <div className="flex items-center justify-between mt-4 text-xs font-semibold text-amber-300 group-hover:text-amber-200">
-                <span>Run Orchestrator</span>
+                <span>Generate Briefing</span>
                 <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
@@ -257,10 +308,10 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-teal-400"></span>
-            <span>Built with <strong>Strands Agents SDK</strong> &middot; Agents for Humans Hackathon</span>
+            <span>Built with <strong>Strands Agents SDK</strong> &middot; Multi-Agent Business Assistant</span>
           </div>
           <div>
-            <span>Architecture: Multi-Agent Orchestrator (Agents-as-Tools Pattern)</span>
+            <span>Architecture: Agents-as-Tools Pattern &middot; Grounded Deterministic Analytics</span>
           </div>
         </div>
       </footer>

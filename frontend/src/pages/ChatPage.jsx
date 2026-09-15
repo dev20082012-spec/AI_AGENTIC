@@ -14,18 +14,19 @@ import {
   Bot,
   User,
   Sparkles,
-  HelpCircle,
   Copy,
   Check,
+  RotateCcw,
+  Square,
+  Activity,
+  CheckCircle2,
 } from "lucide-react";
-
-
 
 const SPECIALIST_META = {
   executive: {
     name: "Chief of Staff",
-    shortName: "Chief of Staff",
-    role: "Conversational Executive AI & Multi-Agent Coordinator",
+    shortName: "Executive AI",
+    role: "Conversational Executive Chief of Staff & Multi-Agent Coordinator",
     icon: Sparkles,
     accent: "indigo",
     borderGlow: "border-indigo-500/40",
@@ -34,8 +35,10 @@ const SPECIALIST_META = {
     agentBubble: "bg-slate-900 border-slate-800 text-slate-100",
     starters: [
       "How are sales performing across our products?",
+      "Why is BetaSuite growing while AlphaApp dominates volume?",
+      "Which operational tasks are currently blocked or stale?",
+      "Could operations be contributing to any product bottlenecks?",
       "What should I focus on this week across all departments?",
-      "Could operational bottlenecks explain any revenue trends?",
     ],
   },
   finance: {
@@ -95,11 +98,15 @@ export default function ChatPage() {
 
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streamStatus, setStreamStatus] = useState("");
+  const [streamingContent, setStreamingContent] = useState("");
+  const [streamingSpecialists, setStreamingSpecialists] = useState([]);
   const [copiedIndex, setCopiedIndex] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const requestIdRef = useRef(0);
+  const abortControllerRef = useRef(null);
 
   const meta = SPECIALIST_META[specialist];
   const history = (conversations && conversations[specialist]) || [];
@@ -112,7 +119,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [history, loading]);
+  }, [history, loading, streamingContent, streamStatus]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -122,55 +129,175 @@ export default function ChatPage() {
 
   const Icon = meta.icon;
 
+  const formatTimestamp = () => {
+    return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const handleStopStreaming = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (streamingContent.trim()) {
+      addMessage(specialist, {
+        role: "assistant",
+        content: streamingContent + " *(generation stopped)*",
+        timestamp: formatTimestamp(),
+        specialists_used: streamingSpecialists,
+      });
+    }
+    setLoading(false);
+    setStreamingContent("");
+    setStreamStatus("");
+  };
+
   const handleSendMessage = async (textToSend) => {
     const text = (textToSend || inputValue).trim();
     if (!text || loading) return;
 
     const currentRequestId = ++requestIdRef.current;
     setInputValue("");
+    setStreamingContent("");
+    setStreamStatus("Analyzing inquiry...");
+    setStreamingSpecialists([]);
 
-    // Snapshot history BEFORE adding the new user message
+    const timestamp = formatTimestamp();
     const historySnapshot = [...history];
 
-    const userMsg = { role: "user", content: text };
+    const userMsg = { role: "user", content: text, timestamp };
     addMessage(specialist, userMsg);
-
     setLoading(true);
 
-    try {
-      const response = await fetch(`${API_BASE}/api/chat/${specialist}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          history: historySnapshot,
-        }),
-      });
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.detail || `Server error (${response.status})`);
+    // Use SSE streaming endpoint for executive chat, standard fallback for others
+    if (specialist === "executive") {
+      try {
+        const response = await fetch(`${API_BASE}/api/chat/executive/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            history: historySnapshot,
+          }),
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server error (${response.status})`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let accumulated = "";
+        let usedSpecs = [];
+        let finalMeta = {};
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const parsed = JSON.parse(line.slice(6));
+                if (parsed.event === "status") {
+                  setStreamStatus(parsed.text || "");
+                } else if (parsed.event === "specialist") {
+                  usedSpecs = parsed.specialists || [];
+                  setStreamingSpecialists(usedSpecs);
+                } else if (parsed.event === "token") {
+                  accumulated += parsed.delta;
+                  setStreamingContent(accumulated);
+                } else if (parsed.event === "done") {
+                  usedSpecs = parsed.specialists_used || usedSpecs;
+                  finalMeta = parsed.metadata || {};
+                }
+              } catch (e) {
+                // Ignore chunk parse errors
+              }
+            }
+          }
+        }
+
+        if (currentRequestId === requestIdRef.current && accumulated.trim()) {
+          addMessage(specialist, {
+            role: "assistant",
+            content: accumulated,
+            timestamp: formatTimestamp(),
+            specialists_used: usedSpecs,
+            metadata: finalMeta,
+          });
+        }
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        if (currentRequestId === requestIdRef.current) {
+          addMessage(specialist, {
+            role: "assistant",
+            isError: true,
+            failedQuery: text,
+            content: `**Error:** Failed to connect with ${meta.name}. (${err.message}).`,
+            timestamp: formatTimestamp(),
+          });
+        }
+      } finally {
+        if (currentRequestId === requestIdRef.current) {
+          setLoading(false);
+          setStreamingContent("");
+          setStreamStatus("");
+          abortControllerRef.current = null;
+        }
       }
+    } else {
+      // Standard POST endpoint for domain specialists
+      try {
+        const response = await fetch(`${API_BASE}/api/chat/${specialist}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            history: historySnapshot,
+          }),
+          signal: abortController.signal,
+        });
 
-      const data = await response.json();
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server error (${response.status})`);
+        }
 
-      // Discard response if a newer request was dispatched in the meantime
-      if (currentRequestId !== requestIdRef.current) return;
+        const data = await response.json();
 
-      addMessage(specialist, {
-        role: "assistant",
-        content: data.response || "No response received.",
-        specialists_used: data.specialists_used || [],
-      });
-    } catch (err) {
-      if (currentRequestId !== requestIdRef.current) return;
-      addMessage(specialist, {
-        role: "assistant",
-        content: `**Error:** Failed to get response from ${meta.name}. (${err.message}). Please try again.`,
-      });
-    } finally {
-      if (currentRequestId === requestIdRef.current) {
-        setLoading(false);
+        if (currentRequestId === requestIdRef.current) {
+          addMessage(specialist, {
+            role: "assistant",
+            content: data.response || "No response received.",
+            timestamp: formatTimestamp(),
+            specialists_used: data.specialists_used || [],
+            metadata: data.metadata || {},
+          });
+        }
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        if (currentRequestId === requestIdRef.current) {
+          addMessage(specialist, {
+            role: "assistant",
+            isError: true,
+            failedQuery: text,
+            content: `**Error:** Failed to receive response from ${meta.name}. (${err.message}).`,
+            timestamp: formatTimestamp(),
+          });
+        }
+      } finally {
+        if (currentRequestId === requestIdRef.current) {
+          setLoading(false);
+          abortControllerRef.current = null;
+        }
       }
     }
   };
@@ -223,16 +350,16 @@ export default function ChatPage() {
           {history.length > 0 && (
             <button
               onClick={() => clearHistory(specialist)}
-              title="Clear conversation history"
+              title="Reset and start new conversation"
               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-400 px-2.5 py-1.5 rounded-lg hover:bg-slate-900 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Clear Chat</span>
+              <span className="hidden sm:inline">New Thread</span>
             </button>
           )}
           <div className="flex items-center gap-1.5 text-xs text-emerald-400 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Ready</span>
+            <span>Agent Active</span>
           </div>
         </div>
       </header>
@@ -249,14 +376,14 @@ export default function ChatPage() {
                 Consult with {meta.name}
               </h2>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Persistent multi-turn executive intelligence. Your conversation history is maintained even if you navigate away or refresh.
+                Persistent multi-turn conversational AI. State is preserved automatically across sessions with semantic context resolution.
               </p>
             </div>
 
             {/* Starter prompts */}
             <div className="w-full max-w-lg space-y-2">
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block text-left">
-                Suggested Prompts
+                Suggested Inquiries:
               </span>
               <div className="grid gap-2">
                 {meta.starters.map((starter, idx) => (
@@ -266,7 +393,7 @@ export default function ChatPage() {
                     className="w-full text-left text-xs text-slate-300 p-3 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/80 transition-all flex items-center justify-between group"
                   >
                     <span>{starter}</span>
-                    <Sparkles className="w-3.5 h-3.5 text-slate-500 group-hover:text-teal-400 transition-colors shrink-0 ml-2" />
+                    <Sparkles className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 transition-colors shrink-0 ml-2" />
                   </button>
                 ))}
               </div>
@@ -282,7 +409,7 @@ export default function ChatPage() {
               >
                 {!isUser && (
                   <div className={`w-8 h-8 rounded-lg bg-slate-900 border ${meta.borderGlow} flex items-center justify-center shrink-0 mt-0.5`}>
-                    <Bot className="w-4 h-4 text-teal-400" />
+                    <Bot className="w-4 h-4 text-indigo-400" />
                   </div>
                 )}
 
@@ -291,10 +418,17 @@ export default function ChatPage() {
                     isUser ? meta.userBubble : meta.agentBubble
                   }`}
                 >
+                  {/* Timestamp header */}
+                  <div className="flex items-center justify-between gap-2 mb-1.5 text-[10px] text-slate-400">
+                    <span className="font-semibold">{isUser ? "You" : meta.name}</span>
+                    {msg.timestamp && <span>{msg.timestamp}</span>}
+                  </div>
+
                   {isUser ? (
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                   ) : (
                     <>
+                      {/* Safe Specialist Activity Badges */}
                       {msg.specialists_used && msg.specialists_used.length > 0 && (
                         <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
                           <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Consulted:</span>
@@ -312,11 +446,30 @@ export default function ChatPage() {
                               </span>
                             );
                           })}
+                          {msg.metadata?.steps > 0 && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                              {msg.metadata.steps}-step analysis
+                            </span>
+                          )}
                         </div>
                       )}
+
                       <div className="prose prose-invert prose-xs md:prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0.5">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
+
+                      {/* Error Retry Option */}
+                      {msg.isError && msg.failedQuery && (
+                        <div className="mt-3 pt-2 border-t border-slate-800">
+                          <button
+                            onClick={() => handleSendMessage(msg.failedQuery)}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Retry Request</span>
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -344,19 +497,36 @@ export default function ChatPage() {
           })
         )}
 
-        {/* Loading Thinking Indicator */}
+        {/* Streaming / Loading Indicator Bubble */}
         {loading && (
-          <div className="flex gap-3 justify-start items-center">
-            <div className={`w-8 h-8 rounded-lg bg-slate-900 border ${meta.borderGlow} flex items-center justify-center shrink-0`}>
-              <Bot className="w-4 h-4 text-teal-400" />
+          <div className="flex gap-3 justify-start items-start">
+            <div className={`w-8 h-8 rounded-lg bg-slate-900 border ${meta.borderGlow} flex items-center justify-center shrink-0 mt-0.5`}>
+              <Bot className="w-4 h-4 text-indigo-400" />
             </div>
-            <div className="rounded-2xl px-4 py-3 bg-slate-900 border border-slate-800 text-slate-400 text-xs flex items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: "0ms" }}></span>
-                <span className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: "150ms" }}></span>
-                <span className="w-2 h-2 rounded-full bg-teal-400 animate-bounce" style={{ animationDelay: "300ms" }}></span>
+            <div className="rounded-2xl p-4 bg-slate-900 border border-slate-800 text-slate-200 text-xs md:text-sm max-w-[85%] md:max-w-[75%] space-y-3">
+              {/* Status Header */}
+              <div className="flex items-center gap-2 text-slate-400 text-xs">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                <span>{streamStatus || `${meta.shortName} is analyzing...`}</span>
               </div>
-              <span className="text-slate-400 text-xs">{meta.shortName} Specialist is reasoning...</span>
+
+              {/* Streaming Content */}
+              {streamingContent ? (
+                <div className="prose prose-invert prose-xs md:prose-sm max-w-none">
+                  <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                </div>
+              ) : null}
+
+              {/* Stop Generation Button */}
+              <div className="pt-2">
+                <button
+                  onClick={handleStopStreaming}
+                  className="inline-flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-3 py-1 rounded-lg transition-colors"
+                >
+                  <Square className="w-3 h-3 fill-current" />
+                  <span>Stop Generation</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -382,13 +552,13 @@ export default function ChatPage() {
                 onKeyDown={handleKeyDown}
                 rows={1}
                 placeholder={`Ask ${meta.name} anything... (Shift+Enter for newline)`}
-                className="w-full resize-none rounded-xl bg-slate-900 border border-slate-800 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-all"
+                className="w-full resize-none rounded-xl bg-slate-900 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-all"
               />
             </div>
             <button
               type="submit"
               disabled={!inputValue.trim() || loading}
-              className="h-11 px-4 rounded-xl bg-teal-500 hover:bg-teal-400 disabled:opacity-40 disabled:hover:bg-teal-500 text-slate-950 font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-teal-500/20"
+              className="h-11 px-4 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:hover:bg-indigo-500 text-slate-950 font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-500/20"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -401,8 +571,8 @@ export default function ChatPage() {
             </button>
           </form>
           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 px-1">
-            <span>Powered by Strands Agents SDK &middot; Groq Llama/Qwen Inference</span>
-            <span>History saved to localStorage</span>
+            <span>Powered by Strands Agents &middot; Groq/OpenRouter Failover</span>
+            <span>History persisted to localStorage</span>
           </div>
         </div>
       </footer>

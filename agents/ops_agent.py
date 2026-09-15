@@ -121,6 +121,7 @@ def run_ops_query_structured(query: str, history: list = None) -> dict:
 
     return {
         "specialist": "ops",
+        "status": "ok",
         "answer": answer,
         "findings": findings,
         "metrics": data.get("counts", {}),

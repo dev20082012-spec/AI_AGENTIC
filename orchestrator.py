@@ -1,126 +1,49 @@
+"""
+AGentic Resolve — Executive Business Briefing Orchestrator
+
+Coordinates Finance, Operations, and Marketing specialist analyses for full
+executive business briefings. Handles partial specialist failures gracefully,
+ensuring uninterrupted synthesis across available data without fabricating missing numbers.
+"""
+
 import sys
 import os
 import time
+from datetime import datetime, timezone
 import re
+from model import chat_completion, get_model
+from agents.finance_agent import run_finance_query_structured
+from agents.ops_agent import run_ops_query_structured
+from agents.marketing_agent import run_marketing_query_structured
 
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-if hasattr(sys.stderr, 'reconfigure'):
-    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-def _load_env():
-    """Load .env file for local dev. Production platforms inject env vars natively."""
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=False)
-    except ImportError:
-        # Fallback: manual parser if python-dotenv isn't installed yet
-        env_path = os.path.join(os.path.dirname(__file__), ".env")
-        if os.path.exists(env_path):
-            with open(env_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        k, v = line.split("=", 1)
-                        os.environ.setdefault(k.strip(), v.strip().strip("'\""))
-
-_load_env()
-
-if not os.environ.get("GROQ_API_KEY"):
-    raise SystemExit(
-        "\n[ERROR] Missing environment variable: GROQ_API_KEY\n\n"
-        "  Get a free key at https://console.groq.com -> API Keys\n"
-        "  Then set it before running:\n\n"
-        "  PowerShell:  $env:GROQ_API_KEY='your_key_here'\n"
-        "  CMD:         set GROQ_API_KEY=your_key_here\n"
-    )
-
-from strands import Agent, tool
-from model import get_model
-
-from agents.finance_agent import run_finance_query
-from agents.ops_agent import run_ops_query
-from agents.marketing_agent import run_marketing_query
-
-_call_count = {"n": 0}
-_last_run_details = {
-    "specialists_called": [],
-    "specialist_results": {
-        "finance": {"called": False, "summary": ""},
-        "ops": {"called": False, "summary": ""},
-        "marketing": {"called": False, "summary": ""},
-    },
-}
-
-
-def _call_with_ratelimit_retry(fn, *args, **kwargs):
-    max_attempts = 3
-    for attempt in range(1, max_attempts + 1):
-        try:
-            return fn(*args, **kwargs)
-        except Exception as e:
-            err_msg = f"{str(e)} {getattr(e, '__cause__', '')} {repr(e)}"
-            is_ratelimit = any(w in err_msg.lower() for w in ["rate limit", "ratelimit", "429", "eventloop"])
-            if is_ratelimit and attempt < max_attempts:
-                match = re.search(r"try again in ([0-9.]+)s", err_msg, re.IGNORECASE)
-                if not match:
-                    match = re.search(r"in ([0-9.]+)s", err_msg, re.IGNORECASE)
-                wait_sec = float(match.group(1)) + 1.0 if match else 6.0
-                print(f"  [!] Rate limit reached. Auto-retrying in {wait_sec:.1f}s (Attempt {attempt}/{max_attempts})...")
-                time.sleep(wait_sec)
-            else:
-                raise
-
-
-def _timed_specialist(name: str, fn, query: str) -> str:
-    _call_count["n"] += 1
-    if _call_count["n"] > 1:
-        wait = 1
-        time.sleep(wait)
-    print(f"\n  [>>] [Orchestrator] -> {name} specialist")
-    result = _call_with_ratelimit_retry(fn, query)
-    print(f"  [OK] [Orchestrator] <- {name} specialist responded")
-
-    key = name.lower()
-    if key not in _last_run_details["specialists_called"]:
-        _last_run_details["specialists_called"].append(key)
-    _last_run_details["specialist_results"][key] = {
-        "called": True,
-        "summary": result,
-    }
-    return result
-
-
-@tool
-def finance_specialist(query: str) -> str:
-    """Handles revenue, sales trends, forecasts, and anomaly questions."""
-    return _timed_specialist("FINANCE", run_finance_query, query)
-
-
-@tool
-def ops_specialist(query: str) -> str:
-    """Handles team status, blocked items, scheduling, and email draft requests."""
-    return _timed_specialist("OPS", run_ops_query, query)
-
-
-@tool
-def marketing_specialist(query: str) -> str:
-    """Handles campaign performance, CTR, conversion rates, and ad spend questions."""
-    return _timed_specialist("MARKETING", run_marketing_query, query)
-
-
-orchestrator = Agent(
-    model=get_model(),
-    system_prompt=(
-        "You are Chief of Staff. Call all 3 specialist tools (finance_specialist, ops_specialist, marketing_specialist) to gather data.\n"
-        "Synthesize their reports into a concise briefing:\n"
-        "- Finance: 1-2 bullet points\n"
-        "- Operations: 1-2 bullet points\n"
-        "- Marketing: 1-2 bullet points\n"
-        "- Key Actions: 3 numbered actions\n"
-        "Keep the full response under 150 words."
-    ),
-    tools=[finance_specialist, ops_specialist, marketing_specialist],
+BRIEFING_SYNTHESIS_SYSTEM_PROMPT = (
+    "You are the Executive Chief of Staff delivering a comprehensive, high-impact Business Briefing "
+    "for executive leadership. Synthesize the findings from Finance, Operations, and Marketing into a "
+    "decision-ready intelligence report.\n\n"
+    "Structure your response clearly with these sections:\n"
+    "### Executive Summary\n"
+    "- 2-3 sentences summarizing the cross-departmental business trajectory.\n\n"
+    "### Key Department Findings\n"
+    "- **Finance**: Core revenue metrics, product momentum, and forecasts.\n"
+    "- **Operations**: Workflow velocity, blocked initiatives, and staffing bottlenecks.\n"
+    "- **Marketing**: Conversion ROI, top customer segments, and regional performance.\n\n"
+    "### Critical Risks & Vulnerabilities\n"
+    "- Bulleted list of top risks across departments requiring executive mitigation.\n\n"
+    "### Strategic Opportunities\n"
+    "- High-ROI levers to accelerate growth or eliminate bottlenecks.\n\n"
+    "### Top 3 Recommended Actions\n"
+    "1. [Action 1: Immediate operational or financial priority]\n"
+    "2. [Action 2: Growth or campaign optimization]\n"
+    "3. [Action 3: Structural or risk-prevention measure]\n\n"
+    "CRITICAL RULES:\n"
+    "1. Never invent or hallucinate metrics. Use ONLY verified data from the specialist reports.\n"
+    "2. If a specialist is unavailable, state that department's data is temporarily offline and DO NOT fabricate it.\n"
+    "3. Be direct, authoritative, and focused on executive decisions."
 )
 
 SAMPLE_QUERY = (
@@ -129,66 +52,205 @@ SAMPLE_QUERY = (
 )
 
 
-def run_briefing(query: str) -> str:
-    _call_count["n"] = 0
-    _last_run_details["specialists_called"] = []
-    _last_run_details["specialist_results"] = {
-        "finance": {"called": False, "summary": ""},
-        "ops": {"called": False, "summary": ""},
-        "marketing": {"called": False, "summary": ""},
-    }
-
-    print(f"\n{'='*70}")
-    print("AGentic Resolve -- Business Briefing")
-    print(f"{'='*70}")
-    print(f"Query: {query}")
-    print(f"{'-'*70}")
-    print("[Orchestrator] Analysing and delegating to specialists...\n")
-
-    try:
-        response = str(_call_with_ratelimit_retry(orchestrator, query))
-    except Exception as e:
-        print(f"  [!] Strands agent orchestration hit provider error ({e}). Failing over to direct specialist collection & resilient chat_completion...")
-        from model import chat_completion
-        f_rep = _timed_specialist("FINANCE", run_finance_query, query)
-        o_rep = _timed_specialist("OPS", run_ops_query, query)
-        m_rep = _timed_specialist("MARKETING", run_marketing_query, query)
-        synth_prompt = [
-            {
-                "role": "system",
-                "content": (
-                    "You are Chief of Staff. Synthesize the 3 specialist reports into a concise executive briefing:\n"
-                    "- Finance: 1-2 bullet points\n"
-                    "- Operations: 1-2 bullet points\n"
-                    "- Marketing: 1-2 bullet points\n"
-                    "- Key Actions: 3 numbered actions\n"
-                    "Keep the full response under 150 words."
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"Finance Report:\n{f_rep}\n\nOperations Report:\n{o_rep}\n\nMarketing Report:\n{m_rep}",
-            },
-        ]
-        response = chat_completion(synth_prompt, max_tokens=350, temperature=0.3)
-
-    print(f"\n{'='*70}")
-    print("SYNTHESIZED BRIEFING")
-    print(f"{'='*70}")
-    print(response)
-    print(f"{'='*70}\n")
-    return response
+def _extract_section_items(text: str, heading_pattern: str) -> list[str]:
+    """Extracts bulleted or numbered items from a specific markdown section."""
+    items = []
+    pattern = rf"###\s*{heading_pattern}.*?\n(.*?)(?=\n###|\Z)"
+    match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+    if match:
+        section_body = match.group(1).strip()
+        for line in section_body.split("\n"):
+            line = line.strip()
+            # Strip bullet or number prefix
+            cleaned = re.sub(r"^([*•\-]|\d+\.)\s*", "", line).strip()
+            if cleaned and not cleaned.startswith("#"):
+                items.append(cleaned)
+    return items
 
 
 def run_briefing_structured(query: str) -> dict:
-    response = run_briefing(query)
+    """
+    Executes a structured executive briefing across all 3 specialist domains:
+    1. Validates input query.
+    2. Runs Finance, Operations, and Marketing analyses in isolated try/except blocks.
+    3. Records per-specialist status ('consulted' vs 'unavailable').
+    4. Synthesizes findings using centralized chat_completion with fallback resilience.
+    5. Returns structured results including key risks, opportunities, and top actions.
+    """
+    start_time = time.time()
+    query = query.strip() if query else SAMPLE_QUERY
+
+    print(f"\n{'='*75}")
+    print("AGENTIC RESOLVE — FULL BUSINESS BRIEFING")
+    print(f"Query: {query}")
+    print(f"{'-'*75}")
+
+    specialists_called = []
+    specialist_results = {
+        "finance": {"called": False, "status": "skipped", "summary": "", "metrics": {}, "findings": []},
+        "ops": {"called": False, "status": "skipped", "summary": "", "metrics": {}, "findings": []},
+        "marketing": {"called": False, "status": "skipped", "summary": "", "metrics": {}, "findings": []},
+    }
+
+    # 1. Finance Analysis
+    print("  [>>] Consulting Finance Specialist...")
+    try:
+        f_data = run_finance_query_structured(query)
+        specialist_results["finance"] = {
+            "called": True,
+            "status": "consulted",
+            "summary": f_data.get("answer", ""),
+            "findings": f_data.get("findings", []),
+            "metrics": f_data.get("metrics", {}),
+            "warnings": f_data.get("warnings", []),
+            "recommendations": f_data.get("recommendations", []),
+        }
+        specialists_called.append("finance")
+        print("  [OK] Finance analysis complete")
+    except Exception as e:
+        print(f"  [!] Finance specialist failed: {e}")
+        specialist_results["finance"] = {
+            "called": True,
+            "status": "unavailable",
+            "summary": "Finance specialist temporarily unavailable.",
+            "error": str(e),
+            "findings": [],
+            "metrics": {},
+            "warnings": [],
+            "recommendations": [],
+        }
+
+    # 2. Operations Analysis
+    print("  [>>] Consulting Operations Specialist...")
+    try:
+        o_data = run_ops_query_structured(query)
+        specialist_results["ops"] = {
+            "called": True,
+            "status": "consulted",
+            "summary": o_data.get("answer", ""),
+            "findings": o_data.get("findings", []),
+            "metrics": o_data.get("metrics", {}),
+            "warnings": o_data.get("warnings", []),
+            "recommendations": o_data.get("recommendations", []),
+        }
+        specialists_called.append("ops")
+        print("  [OK] Operations analysis complete")
+    except Exception as e:
+        print(f"  [!] Operations specialist failed: {e}")
+        specialist_results["ops"] = {
+            "called": True,
+            "status": "unavailable",
+            "summary": "Operations specialist temporarily unavailable.",
+            "error": str(e),
+            "findings": [],
+            "metrics": {},
+            "warnings": [],
+            "recommendations": [],
+        }
+
+    # 3. Marketing Analysis
+    print("  [>>] Consulting Marketing Specialist...")
+    try:
+        m_data = run_marketing_query_structured(query)
+        specialist_results["marketing"] = {
+            "called": True,
+            "status": "consulted",
+            "summary": m_data.get("answer", ""),
+            "findings": m_data.get("findings", []),
+            "metrics": m_data.get("metrics", {}),
+            "warnings": m_data.get("warnings", []),
+            "recommendations": m_data.get("recommendations", []),
+        }
+        specialists_called.append("marketing")
+        print("  [OK] Marketing analysis complete")
+    except Exception as e:
+        print(f"  [!] Marketing specialist failed: {e}")
+        specialist_results["marketing"] = {
+            "called": True,
+            "status": "unavailable",
+            "summary": "Marketing specialist temporarily unavailable.",
+            "error": str(e),
+            "findings": [],
+            "metrics": {},
+            "warnings": [],
+            "recommendations": [],
+        }
+
+    # 4. Construct Synthesis Context from available specialists
+    context_blocks = []
+    for s_name in ("finance", "ops", "marketing"):
+        info = specialist_results[s_name]
+        if info["status"] == "consulted":
+            context_blocks.append(f"=== {s_name.upper()} REPORT ===")
+            context_blocks.append(info["summary"])
+            if info.get("warnings"):
+                context_blocks.append(f"Alerts: {'; '.join(info['warnings'])}")
+            if info.get("recommendations"):
+                context_blocks.append(f"Recommendations: {'; '.join(info['recommendations'])}")
+        else:
+            context_blocks.append(
+                f"=== {s_name.upper()} REPORT ===\n"
+                f"[STATUS: UNAVAILABLE - Data temporarily offline. Do not invent {s_name} data.]"
+            )
+
+    synth_messages = [
+        {"role": "system", "content": BRIEFING_SYNTHESIS_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                f"Executive Briefing Request: {query}\n\n"
+                f"{chr(10).join(context_blocks)}\n\n"
+                "Synthesize the available evidence into the executive briefing following the required sections."
+            ),
+        },
+    ]
+
+    print("  [>>] Synthesizing executive briefing...")
+    synthesis_text, meta = chat_completion(
+        synth_messages,
+        max_tokens=650,
+        temperature=0.25,
+        return_meta=True,
+    )
+    print("  [OK] Synthesis complete")
+
+    # Extract structured highlights
+    key_risks = _extract_section_items(synthesis_text, "Critical Risks")
+    key_opportunities = _extract_section_items(synthesis_text, "Strategic Opportunities")
+    top_actions = _extract_section_items(synthesis_text, "Top 3 Recommended Actions")
+
+    # Fallback to specialist warnings / recommendations if section parsing yielded empty
+    if not key_risks:
+        for s in specialist_results.values():
+            key_risks.extend(s.get("warnings", []))
+    if not top_actions:
+        for s in specialist_results.values():
+            top_actions.extend(s.get("recommendations", []))
+
+    total_latency_ms = int((time.time() - start_time) * 1000)
+    meta["total_latency_ms"] = total_latency_ms
+
     return {
         "query": query,
-        "specialists_called": list(_last_run_details["specialists_called"]),
-        "specialist_results": dict(_last_run_details["specialist_results"]),
-        "synthesized_briefing": response,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "specialists_called": specialists_called,
+        "specialist_results": specialist_results,
+        "key_risks": key_risks[:4],
+        "key_opportunities": key_opportunities[:4],
+        "top_actions": top_actions[:3],
+        "synthesized_briefing": synthesis_text,
+        "metadata": meta,
     }
 
 
+def run_briefing(query: str) -> str:
+    """Backwards-compatible string helper."""
+    data = run_briefing_structured(query)
+    return data["synthesized_briefing"]
+
+
 if __name__ == "__main__":
-    run_briefing(SAMPLE_QUERY)
+    res = run_briefing_structured(SAMPLE_QUERY)
+    print("\n" + "=" * 75)
+    print(res["synthesized_briefing"])
+    print("=" * 75)
