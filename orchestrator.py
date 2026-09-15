@@ -145,7 +145,32 @@ def run_briefing(query: str) -> str:
     print(f"{'-'*70}")
     print("[Orchestrator] Analysing and delegating to specialists...\n")
 
-    response = str(_call_with_ratelimit_retry(orchestrator, query))
+    try:
+        response = str(_call_with_ratelimit_retry(orchestrator, query))
+    except Exception as e:
+        print(f"  [!] Strands agent orchestration hit provider error ({e}). Failing over to direct specialist collection & resilient chat_completion...")
+        from model import chat_completion
+        f_rep = _timed_specialist("FINANCE", run_finance_query, query)
+        o_rep = _timed_specialist("OPS", run_ops_query, query)
+        m_rep = _timed_specialist("MARKETING", run_marketing_query, query)
+        synth_prompt = [
+            {
+                "role": "system",
+                "content": (
+                    "You are Chief of Staff. Synthesize the 3 specialist reports into a concise executive briefing:\n"
+                    "- Finance: 1-2 bullet points\n"
+                    "- Operations: 1-2 bullet points\n"
+                    "- Marketing: 1-2 bullet points\n"
+                    "- Key Actions: 3 numbered actions\n"
+                    "Keep the full response under 150 words."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Finance Report:\n{f_rep}\n\nOperations Report:\n{o_rep}\n\nMarketing Report:\n{m_rep}",
+            },
+        ]
+        response = chat_completion(synth_prompt, max_tokens=350, temperature=0.3)
 
     print(f"\n{'='*70}")
     print("SYNTHESIZED BRIEFING")

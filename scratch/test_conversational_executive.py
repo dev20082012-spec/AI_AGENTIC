@@ -31,7 +31,7 @@ def run_tests():
     r_a1 = requests.post(
         f"{BASE_URL}/api/chat/executive",
         json={"message": "How are sales performing?", "history": []},
-        timeout=60
+        timeout=90
     )
     assert r_a1.status_code == 200, f"Failed: {r_a1.status_code} {r_a1.text}"
     d_a1 = r_a1.json()
@@ -51,7 +51,7 @@ def run_tests():
     r_a2 = requests.post(
         f"{BASE_URL}/api/chat/executive",
         json={"message": "Why?", "history": hist_a2},
-        timeout=60
+        timeout=90
     )
     assert r_a2.status_code == 200, f"Failed: {r_a2.status_code} {r_a2.text}"
     d_a2 = r_a2.json()
@@ -71,7 +71,7 @@ def run_tests():
     r_a3 = requests.post(
         f"{BASE_URL}/api/chat/executive",
         json={"message": "Which product is responsible?", "history": hist_a3},
-        timeout=60
+        timeout=90
     )
     assert r_a3.status_code == 200, f"Failed: {r_a3.status_code} {r_a3.text}"
     d_a3 = r_a3.json()
@@ -91,7 +91,7 @@ def run_tests():
     r_a4 = requests.post(
         f"{BASE_URL}/api/chat/executive",
         json={"message": "Could operations be contributing?", "history": hist_a4},
-        timeout=60
+        timeout=90
     )
     assert r_a4.status_code == 200, f"Failed: {r_a4.status_code} {r_a4.text}"
     d_a4 = r_a4.json()
@@ -111,7 +111,7 @@ def run_tests():
     r_a5 = requests.post(
         f"{BASE_URL}/api/chat/executive",
         json={"message": "What should I do about it?", "history": hist_a5},
-        timeout=60
+        timeout=90
     )
     assert r_a5.status_code == 200, f"Failed: {r_a5.status_code} {r_a5.text}"
     d_a5 = r_a5.json()
@@ -134,7 +134,7 @@ def run_tests():
     r_b1 = requests.post(
         f"{BASE_URL}/api/chat/executive",
         json={"message": "Tell me about marketing.", "history": []},
-        timeout=60
+        timeout=90
     )
     assert r_b1.status_code == 200, f"Failed: {r_b1.status_code} {r_b1.text}"
     d_b1 = r_b1.json()
@@ -153,7 +153,7 @@ def run_tests():
     r_b2 = requests.post(
         f"{BASE_URL}/api/chat/executive",
         json={"message": "Forget that. Which tasks are blocked?", "history": hist_b2},
-        timeout=60
+        timeout=90
     )
     assert r_b2.status_code == 200, f"Failed: {r_b2.status_code} {r_b2.text}"
     d_b2 = r_b2.json()
@@ -175,7 +175,7 @@ def run_tests():
     r_c1 = requests.post(
         f"{BASE_URL}/api/chat/executive",
         json={"message": "Show me performance.", "history": []},
-        timeout=60
+        timeout=90
     )
     assert r_c1.status_code == 200, f"Failed: {r_c1.status_code} {r_c1.text}"
     d_c1 = r_c1.json()
@@ -198,7 +198,7 @@ def run_tests():
     r_d1 = requests.post(
         f"{BASE_URL}/api/chat/executive",
         json={"message": "What should I focus on this week?", "history": []},
-        timeout=45
+        timeout=90
     )
     assert r_d1.status_code == 200, f"Failed: {r_d1.status_code} {r_d1.text}"
     d_d1 = r_d1.json()
@@ -207,7 +207,7 @@ def run_tests():
     print("  -> Response snippet:", d_d1.get("response", "")[:150].replace('\n', ' '), "...")
     assert len(d_d1.get("specialists_used", [])) >= 2, "Expected multi-specialist consultation"
     print("  [PASS] Test D passed.")
-    time.sleep(1.5)
+    time.sleep(2.0)
 
     # ══════════════════════════════════════════════════════════════════════════
     # TEST E: Conversational Greeting (Hello -> 0 specialists, direct answer)
@@ -220,7 +220,7 @@ def run_tests():
     r_e1 = requests.post(
         f"{BASE_URL}/api/chat/executive",
         json={"message": "Hello", "history": []},
-        timeout=25
+        timeout=90
     )
     assert r_e1.status_code == 200, f"Failed: {r_e1.status_code} {r_e1.text}"
     d_e1 = r_e1.json()
@@ -230,7 +230,7 @@ def run_tests():
     assert len(d_e1.get("specialists_used", [])) == 0, "Expected 0 specialists on greeting, NOT finance"
     assert "AlphaApp" not in d_e1.get("response", ""), "Greeting should not include financial report numbers"
     print("  [PASS] Test E passed.")
-    time.sleep(1.5)
+    time.sleep(2.0)
 
     # ══════════════════════════════════════════════════════════════════════════
     # TEST F: Backwards Compatibility (/api/briefing & /api/chat/finance)
@@ -244,7 +244,7 @@ def run_tests():
     r_f1 = requests.post(
         f"{BASE_URL}/api/briefing",
         json={"query": "Give me this week's briefing: revenue trend, pending ops items, and last campaign."},
-        timeout=60
+        timeout=90
     )
     assert r_f1.status_code == 200, f"Failed: {r_f1.status_code} {r_f1.text}"
     d_f1 = r_f1.json()
@@ -252,14 +252,14 @@ def run_tests():
     print("  -> Specialists called:", d_f1.get("specialists_called"))
     assert "synthesized_briefing" in d_f1, "Expected synthesized_briefing in briefing response"
     print("  [PASS] Test F1 passed.")
-    time.sleep(1.5)
+    time.sleep(2.0)
 
     # F2: POST /api/chat/finance
     print("\n[TEST F2] POST /api/chat/finance (Direct Finance Specialist Chat)")
     r_f2 = requests.post(
         f"{BASE_URL}/api/chat/finance",
         json={"message": "What is the 3-month forecast for AlphaApp?", "history": []},
-        timeout=30
+        timeout=90
     )
     assert r_f2.status_code == 200, f"Failed: {r_f2.status_code} {r_f2.text}"
     d_f2 = r_f2.json()

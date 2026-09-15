@@ -70,42 +70,28 @@ def _call_groq(messages: list[dict], model: str = None, max_tokens: int = 400, t
             "temperature": temperature,
         }
 
-        for attempt in range(1, 3):
-            try:
-                resp = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30)
-            except requests.exceptions.RequestException as e:
-                last_err = str(e)
-                continue
+        try:
+            resp = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=20)
+        except requests.exceptions.RequestException as e:
+            last_err = str(e)
+            continue
 
-            if resp.status_code == 200:
-                data = resp.json()
-                msg = data.get("choices", [{}])[0].get("message", {})
-                content = (msg.get("content") or msg.get("reasoning") or "").strip()
-                if content:
-                    return content, target_model
+        if resp.status_code == 200:
+            data = resp.json()
+            msg = data.get("choices", [{}])[0].get("message", {})
+            content = (msg.get("content") or msg.get("reasoning") or "").strip()
+            if content:
+                return content, target_model
 
-            # Strictly do not retry or catch client/auth errors (401, 403, 400)
-            if resp.status_code in (401, 403, 400):
-                resp.raise_for_status()
+        # Strictly do not retry or catch client/auth errors (401, 403, 400)
+        if resp.status_code in (401, 403, 400):
+            resp.raise_for_status()
 
-            err_text = resp.text[:250]
-            last_err = f"Groq error HTTP {resp.status_code}: {err_text}"
+        err_text = resp.text[:250]
+        last_err = f"Groq error HTTP {resp.status_code}: {err_text}"
 
-            # Transient 429: wait if requested and retry once
-            if resp.status_code == 429 and attempt == 1:
-                import re
-                m_ms = re.search(r"in (\d+)ms", err_text)
-                m_s = re.search(r"in ([\d.]+)s", err_text)
-                wait_s = 1.0
-                if m_ms:
-                    wait_s = (float(m_ms.group(1)) / 1000.0) + 0.3
-                elif m_s:
-                    wait_s = float(m_s.group(1)) + 0.5
-                time.sleep(min(max(wait_s, 0.5), 3.5))
-                continue
-
-            # Break inner loop on 429/5xx to try next candidate model
-            break
+        # On 429 / 5xx, immediately try next candidate model or fail over to fallback provider
+        continue
 
     raise TransientProviderError(last_err or "All Groq models failed")
 
@@ -166,6 +152,21 @@ class TransientProviderError(Exception):
     pass
 
 
+def _clean_content(text: str) -> str:
+    """Strips chain-of-thought, thinking tokens, and hidden reasoning tags."""
+    if not text:
+        return ""
+    import re
+    if "<think>" in text:
+        if "</think>" in text:
+            # Complete thinking block present: remove it cleanly
+            text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        else:
+            # Truncated before closing tag: remove the open tag so content remains
+            text = re.sub(r"^<think>\s*", "", text)
+    return text.strip()
+
+
 def chat_completion(
     messages: list[dict],
     model: str = None,
@@ -187,10 +188,12 @@ def chat_completion(
     try:
         if PRIMARY_PROVIDER == "groq":
             res, model_used = _call_groq(messages, model=model, max_tokens=max_tokens, temperature=temperature)
+            res = _clean_content(res)
             meta = {"provider": provider_used, "model": model_used}
             return (res, meta) if return_meta else res
         elif PRIMARY_PROVIDER == "openrouter":
             res, model_used = _call_openrouter(messages, model=model, max_tokens=max_tokens, temperature=temperature)
+            res = _clean_content(res)
             meta = {"provider": provider_used, "model": model_used}
             return (res, meta) if return_meta else res
     except (TransientProviderError, requests.exceptions.RequestException) as e:
@@ -206,6 +209,7 @@ def chat_completion(
                 res, model_used = _call_openrouter(messages, model=FALLBACK_MODEL, max_tokens=max_tokens, temperature=temperature)
             else:
                 res, model_used = _call_groq(messages, model=PRIMARY_MODEL, max_tokens=max_tokens, temperature=temperature)
+            res = _clean_content(res)
             meta = {"provider": provider_used, "model": model_used}
             return (res, meta) if return_meta else res
         except Exception as fb_err:

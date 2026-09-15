@@ -19,7 +19,8 @@ CHIEF_OF_STAFF_SYNTHESIS_PROMPT = (
     "   - Do NOT repeat the raw metrics already stated in prior turns.\n"
     "4. Highlight actionable next steps and strategic business implications.\n"
     "5. Use ONLY numbers provided in the specialist findings; never hallucinate or invent business metrics.\n"
-    "6. Keep formatting clean, scannable, and professional (short bullets or brief paragraphs)."
+    "6. Keep formatting clean, scannable, and professional (short bullets or brief paragraphs).\n"
+    "7. Output ONLY your direct, final executive response. Never produce internal thinking or <think> tags."
 )
 
 ROUTER_PROMPT = """You are the Dispatcher & Intent Analyzer for an Executive Chief of Staff AI.
@@ -400,7 +401,7 @@ def run_executive_turn(message: str, history: list[dict] = None) -> dict:
 
     final_answer, synth_meta = chat_completion(
         synth_messages,
-        max_tokens=260,
+        max_tokens=450,
         temperature=0.3,
         return_meta=True,
     )
