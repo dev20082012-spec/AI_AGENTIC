@@ -1,0 +1,63 @@
+{
+  "th_38fd38b1af": {
+    "thread_id": "th_38fd38b1af",
+    "title": "Test Executive Session",
+    "specialist": "executive",
+    "created_at": "2026-09-15T13:38:42.116852+00:00",
+    "updated_at": "2026-09-15T13:38:42.116852+00:00",
+    "messages": [
+      {
+        "role": "user",
+        "content": "How are sales performing?",
+        "timestamp": "12:00 PM"
+      },
+      {
+        "role": "assistant",
+        "content": "AlphaApp revenue grew +5.6% MoM to $125,000.",
+        "timestamp": "12:01 PM"
+      }
+    ]
+  },
+  "th_c209576740": {
+    "thread_id": "th_c209576740",
+    "title": "How are sales performing across our products?",
+    "specialist": "executive",
+    "created_at": "2026-09-15T13:44:52.141037+00:00",
+    "updated_at": "2026-09-15T13:44:52.141037+00:00",
+    "messages": [
+      {
+        "role": "user",
+        "content": "How are sales performing across our products?",
+        "timestamp": "07:14 PM"
+      }
+    ]
+  },
+  "th_1f4e8af4ec": {
+    "thread_id": "th_1f4e8af4ec",
+    "title": "How are sales performing across our products?",
+    "specialist": "executive",
+    "created_at": "2026-09-15T13:45:00.204758+00:00",
+    "updated_at": "2026-09-15T13:45:00.204758+00:00",
+    "messages": [
+      {
+        "role": "user",
+        "content": "How are sales performing across our products?",
+        "timestamp": "07:14 PM"
+      },
+      {
+        "role": "assistant",
+        "content": "Both products are delivering exceptional growth, with AlphaApp and BetaSuite each expanding revenue by approximately 182% over the period.\n\n**Current Performance Snapshot:**\n*   **AlphaApp:** Leading the portfolio with **$118,700** in recent revenue. Momentum is strong, with a forecast to reach **$131,310** within the next three months.\n*   **BetaSuite:** Tracking closely behind with **$50,600** in revenue, showing nearly identical growth velocity (**+181.1%**).\n\n**Strategic Implications & Next Steps:**\n1.  **Protect AlphaApp Momentum:** The recent spikes in Nov/Dec 2024 indicate strong demand. Ensure operational capacity and support resources scale to meet the projected $131k monthly run-rate.\n2.  **Audit BetaSuite Unit Economics:** While growth is robust, BetaSuite\u2019s revenue base is less than half of AlphaApp\u2019s. Immediately review acquisition costs to ensure this growth is profitable and not driven by unsustainable spend.\n3.  **Investigate Jan 2023 Anomaly:** The significant drop in AlphaApp revenue in early 2023 (-45.7% vs. mean) should be reviewed to determine if it was a one-time operational issue or a seasonal pattern that may recur.",
+        "timestamp": "07:15 PM",
+        "specialists_used": [
+          "finance"
+        ],
+        "metadata": {
+          "intent": "User is asking for sales performance across products",
+          "steps": 1,
+          "provider": "groq",
+          "model": "qwen/qwen3.8-27b"
+        }
+      }
+    ]
+  }
+}

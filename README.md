@@ -170,7 +170,8 @@ AI_AGENTIC/
 ├── agents/
 │   ├── finance_agent.py         # Revenue & financial analytics agent
 │   ├── ops_agent.py             # Operations, teams & blocker agent
-│   └── marketing_agent.py       # Campaign & acquisition analytics agent
+│   ├── marketing_agent.py       # Campaign & acquisition analytics agent
+│   └── tools.py                 # MCP-ready tool registry & AgentTool protocols
 ├── data/
 │   ├── sales_sample.csv         # Finance dataset fixture
 │   ├── employee_updates.json    # Ops dataset fixture
@@ -261,7 +262,11 @@ The deployment model is a single FastAPI backend serving the built React applica
 | `/api/health` | `GET` | Service health check |
 | `/api/chat/{specialist}` | `POST` | Direct domain specialist chat (finance / ops / marketing) |
 | `/api/chat/executive` | `POST` | Dynamic conversational Executive Chief of Staff |
+| `/api/chat/executive/stream` | `POST` | Server-Sent Events (SSE) streaming chat with status events |
 | `/api/briefing` | `POST` | Complete cross-domain business briefing |
+| `/api/observability` | `GET` | Real-time telemetry, provider distribution & execution traces |
+| `/api/threads` | `GET`, `POST` | Server-side thread listing and persistence |
+| `/api/threads/{id}` | `GET`, `DELETE`| Thread retrieval and deletion |
 | `/api/docs` | `GET` | Swagger / OpenAPI documentation |
 
 ### Example Executive Chat Request
@@ -306,9 +311,13 @@ The most important test is not a single prompt, but conversational threads:
 4. **Full Briefing Workflow**:
    - Call `/api/briefing` and verify that Finance, Operations, and Marketing statuses are returned along with the synthesized report.
 
-Run the end-to-end automated test suite locally:
+Run the end-to-end automated test suites locally:
 ```bash
+# Core conversational & routing test suite
 py -u scratch/test_conversational_executive.py
+
+# Quality, streaming & briefing reliability evaluation suite
+py -u scratch/test_agent_evaluation.py
 ```
 
 ---
@@ -329,14 +338,15 @@ py -u scratch/test_conversational_executive.py
 - [x] Multi-turn context resolution and non-repetitive responses
 - [x] Zero-specialist clarification and conversational greeting handling
 - [x] Dynamic specialist routing with structured findings
-- [ ] Streaming chat responses (SSE)
-- [ ] Server-side conversation persistence
+- [x] Streaming chat responses (SSE) (`/api/chat/executive/stream`)
+- [x] Server-side conversation persistence (`/api/threads`)
+- [x] Real-time observability & telemetry telemetry (`/api/observability`)
 
 ### Mid Term
+- [x] MCP (Model Context Protocol) tool registry (`agents/tools.py`)
 - [ ] Live web research tools
 - [ ] Enterprise document retrieval (RAG)
 - [ ] CRM & SQL database connectors
-- [ ] MCP (Model Context Protocol) tool integrations
 - [ ] Cost-aware adaptive model routing
 
 ### Longer Term

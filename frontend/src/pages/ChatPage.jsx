@@ -20,6 +20,11 @@ import {
   Square,
   Activity,
   CheckCircle2,
+  History,
+  BarChart3,
+  X,
+  Server,
+  Zap,
 } from "lucide-react";
 
 const SPECIALIST_META = {
@@ -94,7 +99,15 @@ const SPECIALIST_META = {
 export default function ChatPage() {
   const { specialist } = useParams();
   const navigate = useNavigate();
-  const { conversations, addMessage, clearHistory } = useChat();
+  const {
+    conversations,
+    addMessage,
+    clearHistory,
+    threads,
+    activeThreadId,
+    switchThread,
+    newThread,
+  } = useChat();
 
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
@@ -102,6 +115,10 @@ export default function ChatPage() {
   const [streamingContent, setStreamingContent] = useState("");
   const [streamingSpecialists, setStreamingSpecialists] = useState([]);
   const [copiedIndex, setCopiedIndex] = useState(null);
+
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [diagnosticsData, setDiagnosticsData] = useState(null);
+  const [threadsOpen, setThreadsOpen] = useState(false);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -131,6 +148,17 @@ export default function ChatPage() {
 
   const formatTimestamp = () => {
     return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const loadDiagnostics = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/observability`);
+      if (res.ok) {
+        const d = await res.json();
+        setDiagnosticsData(d);
+      }
+    } catch (e) {}
+    setDiagnosticsOpen(true);
   };
 
   const handleStopStreaming = () => {
@@ -171,7 +199,6 @@ export default function ChatPage() {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    // Use SSE streaming endpoint for executive chat, standard fallback for others
     if (specialist === "executive") {
       try {
         const response = await fetch(`${API_BASE}/api/chat/executive/stream`, {
@@ -254,7 +281,6 @@ export default function ChatPage() {
         }
       }
     } else {
-      // Standard POST endpoint for domain specialists
       try {
         const response = await fetch(`${API_BASE}/api/chat/${specialist}`, {
           method: "POST",
@@ -316,7 +342,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#080c14] text-slate-100 font-sans">
+    <div className="flex flex-col h-screen bg-[#080c14] text-slate-100 font-sans relative">
       {/* Top Header */}
       <header className="h-16 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md px-6 flex items-center justify-between z-10">
         <div className="flex items-center gap-4">
@@ -347,9 +373,30 @@ export default function ChatPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Threads Toggle */}
+          {specialist === "executive" && (
+            <button
+              onClick={() => setThreadsOpen(!threadsOpen)}
+              className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors"
+            >
+              <History className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Threads ({threads.length})</span>
+            </button>
+          )}
+
+          {/* System Diagnostics Button */}
+          <button
+            onClick={loadDiagnostics}
+            title="System Diagnostics & Observability"
+            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors"
+          >
+            <Activity className="w-3.5 h-3.5 text-teal-400" />
+            <span className="hidden sm:inline">Diagnostics</span>
+          </button>
+
           {history.length > 0 && (
             <button
-              onClick={() => clearHistory(specialist)}
+              onClick={() => newThread(specialist)}
               title="Reset and start new conversation"
               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-400 px-2.5 py-1.5 rounded-lg hover:bg-slate-900 transition-colors"
             >
@@ -357,12 +404,179 @@ export default function ChatPage() {
               <span className="hidden sm:inline">New Thread</span>
             </button>
           )}
+
           <div className="flex items-center gap-1.5 text-xs text-emerald-400 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Agent Active</span>
+            <span>Active</span>
           </div>
         </div>
       </header>
+
+      {/* Threads Drawer / Dropdown */}
+      {threadsOpen && (
+        <div className="absolute top-16 right-6 w-80 max-h-96 rounded-2xl bg-slate-950 border border-slate-800 p-4 shadow-2xl z-40 overflow-y-auto space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-xs">
+            <span className="font-bold text-white flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5 text-indigo-400" />
+              Saved Threads
+            </span>
+            <button
+              onClick={() => setThreadsOpen(false)}
+              className="text-slate-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {threads.length === 0 ? (
+            <p className="text-xs text-slate-500 italic text-center py-4">
+              No previous threads saved yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {threads.map((t) => (
+                <button
+                  key={t.thread_id}
+                  onClick={() => {
+                    switchThread(t.thread_id, specialist);
+                    setThreadsOpen(false);
+                  }}
+                  className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all ${
+                    activeThreadId === t.thread_id
+                      ? "bg-indigo-950/50 border-indigo-500/40 text-indigo-200"
+                      : "bg-slate-900/60 border-slate-800/80 text-slate-300 hover:border-slate-700"
+                  }`}
+                >
+                  <div className="font-semibold truncate">{t.title}</div>
+                  <div className="text-[10px] text-slate-500 mt-1 flex justify-between">
+                    <span>{t.message_count} messages</span>
+                    <span>{new Date(t.updated_at).toLocaleDateString()}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Diagnostics Modal */}
+      {diagnosticsOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="rounded-2xl bg-slate-900 border border-slate-800 p-6 max-w-2xl w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-teal-400" />
+                <h3 className="text-sm font-bold text-white">System Observability & Telemetry</h3>
+              </div>
+              <button
+                onClick={() => setDiagnosticsOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {diagnosticsData ? (
+              <div className="space-y-4 text-xs">
+                {/* 4 Stat Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Requests</span>
+                    <span className="text-lg font-black text-white">{diagnosticsData.summary?.total_requests || 0}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Success Rate</span>
+                    <span className="text-lg font-black text-emerald-400">{diagnosticsData.summary?.success_rate_pct || 100}%</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Avg Latency</span>
+                    <span className="text-lg font-black text-teal-400">{diagnosticsData.summary?.avg_latency_ms || 0} ms</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Failovers</span>
+                    <span className="text-lg font-black text-amber-400">{diagnosticsData.summary?.fallback_invocations || 0}</span>
+                  </div>
+                </div>
+
+                {/* Specialist & Provider Distribution */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Specialist Invocations</span>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Finance:</span>
+                      <span className="font-bold text-teal-400">{diagnosticsData.specialist_distribution?.finance || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Operations:</span>
+                      <span className="font-bold text-cyan-400">{diagnosticsData.specialist_distribution?.ops || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Marketing:</span>
+                      <span className="font-bold text-emerald-400">{diagnosticsData.specialist_distribution?.marketing || 0}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Active Providers</span>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Groq Cloud (Primary):</span>
+                      <span className="font-bold text-indigo-400">{diagnosticsData.provider_distribution?.groq || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300">
+                      <span>OpenRouter (Fallback):</span>
+                      <span className="font-bold text-amber-400">{diagnosticsData.provider_distribution?.openrouter || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Rule-Based / Direct:</span>
+                      <span className="font-bold text-slate-400">{diagnosticsData.provider_distribution?.direct || 0}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Traces Table */}
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">Recent Execution Traces</span>
+                  <div className="max-h-44 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950">
+                    <table className="w-full text-left text-[11px] text-slate-300">
+                      <thead className="bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase text-slate-400">
+                        <tr>
+                          <th className="p-2">Endpoint</th>
+                          <th className="p-2">Intent</th>
+                          <th className="p-2">Provider</th>
+                          <th className="p-2">Latency</th>
+                          <th className="p-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {(diagnosticsData.recent_traces || []).map((t, idx) => (
+                          <tr key={idx} className="hover:bg-slate-900/40">
+                            <td className="p-2 font-mono text-slate-400">{t.endpoint}</td>
+                            <td className="p-2 truncate max-w-[120px]">{t.intent}</td>
+                            <td className="p-2">{t.provider}</td>
+                            <td className="p-2">{t.latency_ms} ms</td>
+                            <td className="p-2">
+                              {t.success ? (
+                                <span className="text-emerald-400 font-semibold">OK</span>
+                              ) : (
+                                <span className="text-rose-400 font-semibold">ERR</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-slate-400 text-xs">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto text-teal-400 mb-2" />
+                <span>Loading observability telemetry...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Chat Messages Area */}
       <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 max-w-4xl w-full mx-auto">
@@ -436,13 +650,15 @@ export default function ChatPage() {
                             const badgeStyle =
                               s === "finance" ? "bg-teal-500/15 text-teal-300 border-teal-500/30" :
                               s === "ops" ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/30" :
+                              s === "benchmarks" ? "bg-purple-500/15 text-purple-300 border-purple-500/30" :
                               "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
                             const label =
                               s === "finance" ? "Finance" :
-                              s === "ops" ? "Operations" : "Marketing";
+                              s === "ops" ? "Operations" :
+                              s === "benchmarks" ? "SaaS Benchmarks" : "Marketing";
                             return (
                               <span key={s} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeStyle}`}>
-                                {label} Specialist
+                                {label}
                               </span>
                             );
                           })}
@@ -572,7 +788,7 @@ export default function ChatPage() {
           </form>
           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 px-1">
             <span>Powered by Strands Agents &middot; Groq/OpenRouter Failover</span>
-            <span>History persisted to localStorage</span>
+            <span>Server-synchronized & persisted</span>
           </div>
         </div>
       </footer>

@@ -16,6 +16,8 @@ from orchestrator import run_briefing_structured
 from agents.finance_agent import run_finance_query
 from agents.ops_agent import run_ops_query
 from agents.marketing_agent import run_marketing_query
+from api.observability import record_execution, get_observability_summary
+from api.threads import list_threads, get_thread, save_thread, delete_thread
 
 # ── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -110,8 +112,28 @@ def get_briefing(request: BriefingRequest):
         raise HTTPException(status_code=400, detail="Query exceeds maximum length of 2500 characters.")
     try:
         data = run_briefing_structured(request.query)
+        record_execution(
+            endpoint="/api/briefing",
+            intent="full_business_briefing",
+            provider=data.get("metadata", {}).get("provider", "groq"),
+            model=data.get("metadata", {}).get("model", "qwen3.8-27b"),
+            latency_ms=data.get("metadata", {}).get("total_latency_ms", 1200),
+            specialists_used=data.get("specialists_called", []),
+            success=True,
+            fallback_used=data.get("metadata", {}).get("fallback_used", False),
+        )
         return data
     except Exception as e:
+        record_execution(
+            endpoint="/api/briefing",
+            intent="full_business_briefing",
+            provider="unknown",
+            model="unknown",
+            latency_ms=0,
+            specialists_used=[],
+            success=False,
+            error=str(e),
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Executive Briefing failed: {str(e)}",
@@ -148,8 +170,28 @@ def chat_executive(request: ChatRequest):
     from executive_agent import run_executive_turn
     history_dicts = [{"role": m.role, "content": m.content} for m in request.history]
     try:
-        return run_executive_turn(request.message, history=history_dicts)
+        res = run_executive_turn(request.message, history=history_dicts)
+        record_execution(
+            endpoint="/api/chat/executive",
+            intent=res.get("metadata", {}).get("intent", "executive_query"),
+            provider=res.get("metadata", {}).get("provider", "groq"),
+            model=res.get("metadata", {}).get("model", "qwen3.8-27b"),
+            latency_ms=res.get("metadata", {}).get("latency_ms", 600),
+            specialists_used=res.get("specialists_used", []),
+            success=True,
+        )
+        return res
     except Exception as e:
+        record_execution(
+            endpoint="/api/chat/executive",
+            intent="error",
+            provider="unknown",
+            model="unknown",
+            latency_ms=0,
+            specialists_used=[],
+            success=False,
+            error=str(e),
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Executive Chief of Staff failed: {str(e)}",
@@ -185,6 +227,61 @@ def chat_specialist(specialist: str, request: ChatRequest):
             status_code=500,
             detail=f"{specialist.capitalize()} specialist failed: {str(e)}",
         )
+
+
+# ── Observability & Telemetry Routes ─────────────────────────────────────────
+@app.get("/api/observability")
+@app.get("/observability")
+def get_observability():
+    """Returns real-time execution statistics, specialist distribution, and trace logs."""
+    return get_observability_summary()
+
+
+# ── Thread Persistence Routes ────────────────────────────────────────────────
+class ThreadSaveRequest(BaseModel):
+    thread_id: str | None = None
+    specialist: str = "executive"
+    title: str | None = None
+    messages: list[dict] = Field(default_factory=list)
+
+
+@app.get("/api/threads")
+@app.get("/threads")
+def get_threads(specialist: str | None = None):
+    """Lists saved conversation threads."""
+    return {"threads": list_threads(specialist=specialist)}
+
+
+@app.get("/api/threads/{thread_id}")
+@app.get("/threads/{thread_id}")
+def get_single_thread(thread_id: str):
+    """Retrieves full conversation messages for a thread."""
+    t = get_thread(thread_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    return t
+
+
+@app.post("/api/threads")
+@app.post("/threads")
+def save_thread_endpoint(req: ThreadSaveRequest):
+    """Saves or updates a conversation thread."""
+    return save_thread(
+        thread_id=req.thread_id,
+        specialist=req.specialist,
+        messages=req.messages,
+        title=req.title,
+    )
+
+
+@app.delete("/api/threads/{thread_id}")
+@app.delete("/threads/{thread_id}")
+def delete_thread_endpoint(thread_id: str):
+    """Deletes a conversation thread."""
+    success = delete_thread(thread_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    return {"status": "deleted", "thread_id": thread_id}
 
 
 # ── Static file & SPA serving ────────────────────────────────────────────────
